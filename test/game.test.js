@@ -83,17 +83,19 @@ test('dois de nível máximo são adotados', () => {
 });
 
 test('uma pilha grande fica estável, sem bicho atravessando o cercado', () => {
-  const s = createGame();
-  let seed = 7;
-  const rng = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 40 && !s.over; i++) {
-    drop(s, rng() * W, rng);
-    run(s, 0.6);
-  }
-  run(s, 2);
-  for (const b of s.bodies) {
-    assert.ok(b.x >= b.r - 0.01 && b.x <= W - b.r + 0.01 && b.y <= H - b.r + 0.01);
-    assert.ok(Math.hypot(b.x - b.px, b.y - b.py) < 0.5, 'pilha ainda se mexendo');
+  for (const seed0 of [7, 57, 186, 242]) { // sorteios fixos, para o teste dar sempre o mesmo resultado
+    let seed = seed0 * 7919;
+    const rng = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const s = createGame('cat', rng);
+    for (let i = 0; i < 40 && !s.over; i++) {
+      drop(s, rng() * W, rng);
+      run(s, 0.6);
+    }
+    run(s, 8); // tempo de sobra para as últimas junções e escorregadas
+    for (const b of s.bodies) {
+      assert.ok(b.x >= b.r - 0.01 && b.x <= W - b.r + 0.01 && b.y <= H - b.r + 0.01);
+      assert.ok(Math.hypot(b.x - b.px, b.y - b.py) < 0.05, `sorteio ${seed0}: pilha ainda se mexendo`);
+    }
   }
 });
 
