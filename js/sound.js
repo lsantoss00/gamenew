@@ -52,6 +52,10 @@ export const sfx = {
     tone(f * 1.5, f * 2, 0.14, 'sine', 0.08, 0.07);
   },
   scare: () => tone(900, 250, 0.28, 'sawtooth', 0.05),
+  coin: () => {
+    tone(988, 988, 0.08, 'square', 0.05);
+    tone(1319, 1319, 0.22, 'square', 0.05, 0.08);
+  },
   warning: () => {
     tone(520, 520, 0.08, 'square', 0.04);
     tone(520, 520, 0.08, 'square', 0.04, 0.16);

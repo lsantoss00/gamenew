@@ -3,7 +3,11 @@ import {
   W, H, LINE_Y, DROP_Y, DT, RADII, MAX_LEVEL, KINDS, NAMES,
 } from './game.js';
 import { animalSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
-import { paintScene, drawClouds } from './scene.js';
+import { paintScene, drawAmbient } from './scene.js';
+import {
+  SCENES, newMeta, validMeta, coinsForScore, chooseScene,
+  today, dailyMissions, validMissions, missionText, progressMissions,
+} from './meta.js';
 import { burst, dust, poof, confetti, fling, updateFx, drawFx, clearFx } from './fx.js';
 import { sfx, setAudioMode, unlockAudio, startMusic, stopMusic, setMusicTension } from './sound.js';
 
@@ -38,6 +42,10 @@ const saved = store.get('miau.drop', null);
 let state = validState(saved) ? saved : createGame('cat');
 let best = store.get('miau.drop.best', 0);
 const album = store.get('miau.album', { cat: 0, dog: 0 });
+const savedMeta = store.get('miau.meta', null);
+const meta = validMeta(savedMeta) ? savedMeta : newMeta(); // moedas e cenários
+const savedMissions = store.get('miau.missions', null);
+let missions = validMissions(savedMissions) ? savedMissions : dailyMissions();
 let effects = []; // anéis e textos que aparecem onde algo acontece
 let shake = 0; // segundos de tremor que restam
 let active = false; // o relógio só corre depois do primeiro toque nesta visita
@@ -100,14 +108,14 @@ function isDark() {
 let backdrop = null;
 let backdropKey = '';
 function scene() {
-  const key = `${canvas.width}x${canvas.height}:${isDark()}`;
+  const key = `${canvas.width}x${canvas.height}:${isDark()}:${meta.scene}`;
   if (key !== backdropKey && canvas.width && canvas.height) {
     backdrop = document.createElement('canvas');
     backdrop.width = canvas.width;
     backdrop.height = canvas.height;
     const c = backdrop.getContext('2d');
     c.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
-    paintScene(c, W, H, isDark());
+    paintScene(c, W, H, isDark(), meta.scene);
     backdropKey = key;
   }
   return backdrop;
@@ -183,7 +191,7 @@ function draw(seconds) {
   const back = scene();
   if (back) ctx.drawImage(back, 0, 0);
   ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
-  drawClouds(ctx, W, calm.matches ? 0 : seconds, isDark());
+  drawAmbient(ctx, W, H, calm.matches ? 0 : seconds, isDark(), meta.scene);
   if (shake > 0 && !calm.matches) {
     const amp = 28 * shake;
     ctx.translate((Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp);
@@ -361,6 +369,111 @@ function renderAlbum() {
   }
 }
 
+// --- Moedas, missões e loja ---
+
+const COIN = '<svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f5b301" stroke="#b97d00" stroke-width="1.6"/><ellipse cx="12" cy="14.6" rx="4.2" ry="3.4" fill="#b97d00"/><circle cx="6.9" cy="10.6" r="1.7" fill="#b97d00"/><circle cx="10.2" cy="7.6" r="1.7" fill="#b97d00"/><circle cx="13.8" cy="7.6" r="1.7" fill="#b97d00"/><circle cx="17.1" cy="10.6" r="1.7" fill="#b97d00"/></svg>';
+
+function renderCoins(animate = true) {
+  $('coins').textContent = fmt(meta.coins);
+  if (animate) bump($('coins-chip'));
+}
+
+function earn(amount) {
+  if (amount <= 0) return;
+  meta.coins += amount;
+  store.set('miau.meta', meta);
+  renderCoins();
+}
+
+function renderMissionCount() {
+  $('missions-count').textContent = `${missions.list.filter((m) => m.done).length}/${missions.list.length}`;
+}
+
+// Vira o dia: missões novas.
+function refreshMissions() {
+  if (missions.date === today()) return;
+  missions = dailyMissions();
+  store.set('miau.missions', missions);
+  renderMissionCount();
+}
+
+// Registra um acontecimento nas missões; as que forem concluídas pagam na hora.
+function track(type, value) {
+  const before = missions.list.map((m) => m.progress).join();
+  for (const m of progressMissions(missions, type, value)) {
+    earn(m.reward);
+    toast(`Missão concluída! +${m.reward} moedas`);
+    sfx.coin();
+    renderMissionCount();
+  }
+  if (before !== missions.list.map((m) => m.progress).join()) store.set('miau.missions', missions);
+}
+
+// Paga as moedas da partida, uma vez só. Devolve quanto a partida rendeu.
+function payout() {
+  if (!state.paid) {
+    state.paid = true;
+    state.earned = coinsForScore(state.score);
+    earn(state.earned);
+    save();
+  }
+  return state.earned;
+}
+
+function renderMissions() {
+  $('missions-list').innerHTML = missions.list.map((m) => {
+    const pct = Math.round((m.progress / m.goal) * 100);
+    const status = m.done ? 'Concluída' : (m.type === 'kind' ? 'Ainda não' : `${fmt(m.progress)} de ${fmt(m.goal)}`);
+    return `<li class="${m.done ? 'done' : ''}"><span class="text">${missionText(m)}</span>` +
+      `<span class="reward">${COIN}${m.reward}</span><div class="bar"><i style="width:${pct}%"></i></div><small>${status}</small></li>`;
+  }).join('');
+}
+
+function renderShop() {
+  $('shop-coins').textContent = fmt(meta.coins);
+  const list = $('shop-list');
+  list.replaceChildren();
+  for (const scene of SCENES) {
+    const owned = meta.owned.includes(scene.id);
+    const using = meta.scene === scene.id;
+    const li = document.createElement('li');
+    if (using) li.className = 'using';
+    const preview = document.createElement('canvas');
+    preview.width = 180;
+    preview.height = 260;
+    const c = preview.getContext('2d');
+    c.scale(0.5, 0.5);
+    paintScene(c, W, H, isDark(), scene.id);
+    const name = document.createElement('span');
+    name.textContent = scene.name;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    if (using) {
+      btn.textContent = 'Em uso';
+      btn.disabled = true;
+    } else if (owned) {
+      btn.textContent = 'Usar';
+    } else {
+      btn.innerHTML = `${COIN}${fmt(scene.price)}`;
+      btn.setAttribute('aria-label', `Comprar ${scene.name} por ${scene.price} moedas`);
+      btn.disabled = meta.coins < scene.price;
+      if (!btn.disabled) btn.className = 'primary';
+    }
+    btn.addEventListener('click', () => {
+      if (!chooseScene(meta, scene.id)) return;
+      store.set('miau.meta', meta);
+      if (!owned) {
+        sfx.coin();
+        toast(`Cenário novo: ${scene.name}`);
+      }
+      renderCoins(!owned);
+      renderShop();
+    });
+    li.append(preview, name, btn);
+    list.append(li);
+  }
+}
+
 // --- Tutorial da primeira partida ---
 // Dicas curtas que aparecem no quintal conforme as coisas acontecem, sem travar o jogo.
 
@@ -439,6 +552,10 @@ function handle(events) {
       if (e.level >= 6) shake = 0.25;
       sfx.merge(e.level, e.combo);
       unlock(e.level, true);
+      track('merge');
+      track('combo', e.combo);
+      track('reach', e.level);
+      track('score', state.score);
       if (tutorial?.step === 'merge') tip('clock');
     } else if (e.type === 'adopt') {
       ring(e.x, e.y, RADII[MAX_LEVEL - 1]);
@@ -453,12 +570,14 @@ function handle(events) {
       poof(e.x, e.y, RADII[e.level - 1]);
       fling(sprite(rivalKind(), e.level, 'scared'), e.x, e.y, RADII[e.level - 1], RADII[e.level - 1] * SPRITE_SCALE);
       sfx.scare();
+      track('scare');
       tip('combo');
     } else if (e.type === 'rival') {
       sfx.rival();
     } else if (e.type === 'autodrop') {
       sfx.drop();
       unlock(state.current, false);
+      track('drop');
     }
     changed = true;
   }
@@ -485,6 +604,9 @@ function frame(now) {
   announced = state.warning;
   if (state.over && !wasOver) {
     sfx.over();
+    track('game');
+    track('kind', state.kind);
+    $('earned').textContent = `+${fmt(payout())}`;
     save();
   }
   setMusicTension(state.danger > 0 && !state.over);
@@ -505,10 +627,17 @@ function release() {
   if (tutorial?.step === 'aim') tip('merge');
   if (learningBasics()) state.next = 1;
   unlock(state.current, false);
+  track('drop');
   save();
 }
 
 function newGame(kind) {
+  if (!state.over && state.score > 0) { // partida abandonada também rende moedas
+    const paid = state.paid;
+    const coins = payout();
+    if (coins && !paid) toast(`+${fmt(coins)} moedas pela partida`);
+  }
+  refreshMissions();
   state = createGame(kind);
   effects = [];
   clearFx();
@@ -583,6 +712,17 @@ $('album-btn').addEventListener('click', () => {
   $('album').showModal();
 });
 $('album-close').addEventListener('click', () => $('album').close());
+$('missions-btn').addEventListener('click', () => {
+  refreshMissions();
+  renderMissions();
+  $('missions').showModal();
+});
+$('missions-close').addEventListener('click', () => $('missions').close());
+$('shop-btn').addEventListener('click', () => {
+  renderShop();
+  $('shop').showModal();
+});
+$('shop-close').addEventListener('click', () => $('shop').close());
 const soundBtn = $('sound');
 function renderSound() {
   soundBtn.textContent = AUDIO_LABELS[audioMode];
@@ -604,6 +744,10 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+refreshMissions();
+renderMissionCount();
+renderCoins(false);
+if (state.over) $('earned').textContent = `+${fmt(payout())}`; // partida terminada antes de existirem moedas
 unlock(Math.max(state.current, state.next, ...state.bodies.map((b) => b.level)), false);
 introTip();
 state.aim = clampAim(state.current, state.aim);

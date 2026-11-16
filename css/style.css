@@ -67,7 +67,7 @@ h1 .amp { color: var(--muted); font-weight: 600; }
 .score span { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .score b { font: 800 20px/1.1 var(--display); font-variant-numeric: tabular-nums; }
 
-.info { width: 100%; display: flex; align-items: center; gap: 12px; }
+.info { width: 100%; display: flex; align-items: center; gap: 10px; }
 .hint { margin: 0; flex: 1; min-width: 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
 
 .stage {
@@ -120,6 +120,37 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 
 .actions { width: 100%; display: flex; gap: 10px; }
 .actions button { padding: 8px 4px; font-size: 14px; }
+#missions-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.coin { width: 20px; height: 20px; flex: none; vertical-align: -4px; }
+.coins {
+  display: flex; align-items: center; gap: 6px; padding: 7px 12px 7px 8px;
+  border-radius: 99px; background: var(--panel); box-shadow: 0 3px 0 var(--shadow);
+}
+.coins b { font: 800 17px/1 var(--display); font-variant-numeric: tabular-nums; }
+button.pill { flex: none; min-height: 34px; padding: 6px 12px; border-radius: 99px; font-size: 13px; box-shadow: 0 3px 0 var(--shadow); }
+.next { margin-left: auto; }
+.earned { display: flex; align-items: center; gap: 6px; }
+.overlay .earned b { color: var(--fg); font: 800 20px/1 var(--display); }
+
+.missions, .shop { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+.missions li { padding: 12px 14px; border-radius: 14px; background: var(--panel); display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; }
+.missions .reward { display: flex; align-items: center; gap: 4px; font: 800 16px/1 var(--display); }
+.missions .bar { grid-column: 1 / -1; height: 8px; border-radius: 99px; background: var(--cell); overflow: hidden; }
+.missions .bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+.missions small { grid-column: 1 / -1; color: var(--muted); font-variant-numeric: tabular-nums; }
+.missions .done { opacity: 0.7; }
+.missions .done .text { text-decoration: line-through; }
+
+.balance .coin { margin: 0 4px 0 6px; }
+.balance b { color: var(--fg); }
+.shop { grid-template-columns: repeat(3, 1fr); }
+.shop li { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.shop canvas { width: 100%; height: auto; aspect-ratio: 360 / 520; border-radius: 12px; border: 3px solid var(--wood); cursor: default; }
+.shop .using canvas { border-color: var(--accent); }
+.shop button { width: 100%; min-height: 38px; padding: 6px 4px; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.shop button:disabled { opacity: 0.55; cursor: default; }
+.shop .coin { width: 16px; height: 16px; }
 button {
   flex: 1; min-height: 46px; padding: 8px 14px;
   border: 0; border-radius: 14px; cursor: pointer;

@@ -1,5 +1,5 @@
-// Cenário do quintal, pintado por código: céu, morros, cerca de madeira e gramado.
-// Tem versão de dia (tema claro) e de noite (tema escuro).
+// Cenários pintados por código: quintal, praia e neve.
+// Cada um tem versão de dia (tema claro) e de noite (tema escuro).
 
 const DAY = {
   sky: ['#6ec6ff', '#c9ecff'], orb: '#fff3b0', glow: 'rgb(255 243 176 / 0.35)',
@@ -23,7 +23,7 @@ function seeded(seed) {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
-export function paintScene(ctx, W, H, dark) {
+function paintQuintal(ctx, W, H, dark) {
   const c = dark ? NIGHT : DAY;
   const rnd = seeded(42);
 
@@ -160,8 +160,328 @@ export function paintScene(ctx, W, H, dark) {
   }
 }
 
+// --- Peças comuns aos cenários novos ---
+
+function sky(ctx, W, H, horizon, top, bottom) {
+  const g = ctx.createLinearGradient(0, 0, 0, horizon);
+  g.addColorStop(0, top);
+  g.addColorStop(1, bottom);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function stars(ctx, W, rnd) {
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 46; i++) {
+    ctx.globalAlpha = 0.35 + rnd() * 0.6;
+    ctx.beginPath();
+    ctx.arc(rnd() * W, rnd() * 200, 0.6 + rnd() * 1.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function orb(ctx, x, y, color, glow) {
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(x, y, 44, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, 26, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function circle(ctx, x, y, r, fill, stroke) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+}
+
+// --- Praia: mar, veleiro, coqueiro, guarda-sol e areia ---
+
+function paintPraia(ctx, W, H, dark) {
+  const c = dark
+    ? { sky: ['#0b1533', '#2a3f6b'], orb: '#f4f1de', glow: 'rgb(244 241 222 / 0.18)', sea: ['#12305a', '#1f5a80'], foam: 'rgb(255 255 255 / 0.35)',
+      sand: ['#6f654a', '#4f4730'], speck: 'rgb(0 0 0 / 0.18)', trunk: '#4a3421', leaf: '#1f5a3a', leafDark: '#174529', red: '#8c2f3a', white: '#b9b7ad', hull: '#3b3f52' }
+    : { sky: ['#3fb8f5', '#d6f3ff'], orb: '#fff3b0', glow: 'rgb(255 243 176 / 0.4)', sea: ['#1f9fd0', '#7fd9ee'], foam: 'rgb(255 255 255 / 0.9)',
+      sand: ['#f8e2a8', '#e8c476'], speck: 'rgb(160 110 40 / 0.25)', trunk: '#9a6a3c', leaf: '#3fae5a', leafDark: '#2c8a45', red: '#ff5d5d', white: '#ffffff', hull: '#e8554e' };
+  const rnd = seeded(7);
+  const HORIZON = 286;
+  const SHORE = 362;
+  sky(ctx, W, H, HORIZON, c.sky[0], c.sky[1]);
+  if (dark) stars(ctx, W, rnd);
+  orb(ctx, 296, 58, c.orb, c.glow);
+
+  // mar, com ondinhas
+  const sea = ctx.createLinearGradient(0, HORIZON, 0, SHORE);
+  sea.addColorStop(0, c.sea[0]);
+  sea.addColorStop(1, c.sea[1]);
+  ctx.fillStyle = sea;
+  ctx.fillRect(0, HORIZON, W, SHORE - HORIZON + 10);
+  ctx.strokeStyle = c.foam;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 14; i++) {
+    const x = rnd() * W;
+    const y = HORIZON + 10 + rnd() * (SHORE - HORIZON - 26);
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + 7, y - 4, x + 14, y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // veleiro no horizonte
+  ctx.fillStyle = c.hull;
+  ctx.beginPath();
+  ctx.moveTo(96, HORIZON + 4);
+  ctx.lineTo(132, HORIZON + 4);
+  ctx.lineTo(126, HORIZON + 13);
+  ctx.lineTo(102, HORIZON + 13);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = c.white;
+  ctx.beginPath();
+  ctx.moveTo(114, HORIZON - 30);
+  ctx.lineTo(114, HORIZON + 1);
+  ctx.lineTo(134, HORIZON + 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(111, HORIZON - 22);
+  ctx.lineTo(111, HORIZON + 1);
+  ctx.lineTo(98, HORIZON + 1);
+  ctx.closePath();
+  ctx.fill();
+
+  // areia, com a espuma da onda na beirada
+  const sand = ctx.createLinearGradient(0, SHORE, 0, H);
+  sand.addColorStop(0, c.sand[0]);
+  sand.addColorStop(1, c.sand[1]);
+  ctx.fillStyle = sand;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  ctx.lineTo(0, SHORE);
+  for (let x = 0; x <= W; x += 40) ctx.quadraticCurveTo(x + 20, SHORE + (x % 80 ? 9 : -5), x + 40, SHORE);
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = c.foam;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, SHORE);
+  for (let x = 0; x <= W; x += 40) ctx.quadraticCurveTo(x + 20, SHORE + (x % 80 ? 9 : -5), x + 40, SHORE);
+  ctx.stroke();
+  ctx.fillStyle = c.speck;
+  for (let i = 0; i < 90; i++) ctx.fillRect(rnd() * W, SHORE + 14 + rnd() * (H - SHORE - 16), 1.6, 1.6);
+
+  // guarda-sol
+  ctx.strokeStyle = c.trunk;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(292, 300);
+  ctx.lineTo(302, 400);
+  ctx.stroke();
+  for (let i = 0; i < 6; i++) {
+    ctx.fillStyle = i % 2 ? c.white : c.red;
+    ctx.beginPath();
+    ctx.moveTo(292, 300);
+    ctx.arc(292, 300, 56, Math.PI + (i * Math.PI) / 6 - 0.1, Math.PI + ((i + 1) * Math.PI) / 6 - 0.1);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // coqueiro
+  ctx.strokeStyle = c.trunk;
+  ctx.lineWidth = 11;
+  ctx.beginPath();
+  ctx.moveTo(34, 392);
+  ctx.quadraticCurveTo(30, 300, 62, 236);
+  ctx.stroke();
+  for (const [dx, dy, k] of [[-58, 6, 1], [-44, -30, 0], [-6, -46, 1], [40, -34, 0], [60, 4, 1], [28, 30, 0], [-30, 32, 1]]) {
+    ctx.fillStyle = k ? c.leaf : c.leafDark;
+    ctx.beginPath();
+    ctx.moveTo(62, 236);
+    ctx.quadraticCurveTo(62 + dx * 0.5 - dy * 0.25, 236 + dy * 0.5 + dx * 0.25 - 10, 62 + dx, 236 + dy);
+    ctx.quadraticCurveTo(62 + dx * 0.5 + dy * 0.2, 236 + dy * 0.5 - dx * 0.2 + 8, 62, 236);
+    ctx.fill();
+  }
+  circle(ctx, 58, 242, 5, c.trunk);
+  circle(ctx, 68, 243, 5, c.trunk);
+
+  // estrelas-do-mar e conchas
+  for (let i = 0; i < 5; i++) {
+    const x = 20 + rnd() * (W - 40);
+    const y = SHORE + 30 + rnd() * (H - SHORE - 50);
+    if (i % 2) {
+      ctx.fillStyle = dark ? '#8a5a3a' : '#ff9f43';
+      ctx.beginPath();
+      for (let p = 0; p < 10; p++) {
+        const a = (p / 10) * Math.PI * 2 + i;
+        const d = p % 2 ? 3 : 7;
+        ctx.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d);
+      }
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.fillStyle = dark ? '#a79a8c' : '#fff1e6';
+      ctx.beginPath();
+      ctx.arc(x, y, 6, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = c.speck;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+}
+
+// --- Neve: montanhas, pinheiros, boneco de neve e chão branco ---
+
+function paintNeve(ctx, W, H, dark) {
+  const c = dark
+    ? { sky: ['#0b1533', '#2b3f66'], orb: '#f4f1de', glow: 'rgb(244 241 222 / 0.18)', peak: '#3b4a6b', peakFar: '#2f3d5c', cap: '#c9d6ea',
+      pine: '#173d33', pineSnow: '#b9c9de', snow: ['#aebfd8', '#7f93b3'], shade: 'rgb(20 40 80 / 0.25)', body: '#c9d6ea', line: '#5d6f8f' }
+    : { sky: ['#8fcdf5', '#eef8ff'], orb: '#fff7cf', glow: 'rgb(255 247 207 / 0.45)', peak: '#9fb6d4', peakFar: '#bccde3', cap: '#ffffff',
+      pine: '#2f7d5b', pineSnow: '#ffffff', snow: ['#ffffff', '#c5def5'], shade: 'rgb(120 160 210 / 0.3)', body: '#ffffff', line: '#9db8d6' };
+  const rnd = seeded(99);
+  const GROUND = 336;
+  sky(ctx, W, H, GROUND, c.sky[0], c.sky[1]);
+  if (dark) stars(ctx, W, rnd);
+  orb(ctx, 296, 58, c.orb, c.glow);
+
+  // montanhas com o topo nevado
+  for (const [x, top, half, color] of [[250, 150, 150, c.peakFar], [70, 170, 140, c.peak], [330, 205, 110, c.peak]]) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x - half, GROUND + 10);
+    ctx.lineTo(x, top);
+    ctx.lineTo(x + half, GROUND + 10);
+    ctx.closePath();
+    ctx.fill();
+    const k = 0.28; // fração da altura coberta de neve
+    const h = (GROUND + 10 - top) * k;
+    ctx.fillStyle = c.cap;
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x - half * k, top + h);
+    ctx.lineTo(x - half * k * 0.45, top + h - 9);
+    ctx.lineTo(x, top + h + 4);
+    ctx.lineTo(x + half * k * 0.5, top + h - 10);
+    ctx.lineTo(x + half * k, top + h);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // pinheiros
+  for (const [x, s] of [[24, 1], [64, 0.75], [112, 1.1], [168, 0.8], [214, 0.95], [256, 0.7]]) {
+    const base = GROUND + 8;
+    ctx.fillStyle = dark ? '#3a2a1c' : '#7a5234';
+    ctx.fillRect(x - 3 * s, base - 14 * s, 6 * s, 16 * s);
+    for (let i = 0; i < 3; i++) {
+      const y = base - 12 * s - i * 22 * s;
+      const w = (26 - i * 6) * s;
+      ctx.fillStyle = c.pine;
+      ctx.beginPath();
+      ctx.moveTo(x - w, y);
+      ctx.lineTo(x, y - 34 * s);
+      ctx.lineTo(x + w, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = c.pineSnow;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 34 * s);
+      ctx.lineTo(x - w * 0.42, y - 18 * s);
+      ctx.lineTo(x - w * 0.12, y - 22 * s);
+      ctx.lineTo(x + w * 0.1, y - 17 * s);
+      ctx.lineTo(x + w * 0.42, y - 18 * s);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // chão de neve, em montinhos
+  const snow = ctx.createLinearGradient(0, GROUND, 0, H);
+  snow.addColorStop(0, c.snow[0]);
+  snow.addColorStop(1, c.snow[1]);
+  ctx.fillStyle = snow;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  ctx.lineTo(0, GROUND + 6);
+  for (let x = 0; x < W; x += 90) ctx.quadraticCurveTo(x + 45, GROUND - 14, x + 90, GROUND + 6);
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = c.shade;
+  for (let i = 0; i < 9; i++) {
+    ctx.beginPath();
+    ctx.ellipse(rnd() * W, GROUND + 30 + rnd() * (H - GROUND - 40), 26 + rnd() * 30, 5 + rnd() * 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // boneco de neve
+  const bx = 306;
+  const by = GROUND + 22;
+  circle(ctx, bx, by, 26, c.body, c.line);
+  circle(ctx, bx, by - 36, 18, c.body, c.line);
+  ctx.strokeStyle = dark ? '#3a2a1c' : '#7a5234';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(bx - 22, by - 8);
+  ctx.lineTo(bx - 44, by - 24);
+  ctx.moveTo(bx + 22, by - 8);
+  ctx.lineTo(bx + 42, by - 26);
+  ctx.stroke();
+  ctx.fillStyle = dark ? '#8c2f3a' : '#ff5d5d'; // cachecol
+  ctx.fillRect(bx - 16, by - 23, 32, 7);
+  ctx.fillRect(bx + 6, by - 20, 7, 18);
+  circle(ctx, bx - 6, by - 41, 2.2, '#231c19');
+  circle(ctx, bx + 6, by - 41, 2.2, '#231c19');
+  ctx.fillStyle = '#ff9f43';
+  ctx.beginPath();
+  ctx.moveTo(bx, by - 37);
+  ctx.lineTo(bx + 14, by - 34);
+  ctx.lineTo(bx, by - 32);
+  ctx.closePath();
+  ctx.fill();
+  for (const dy of [-8, 2, 12]) circle(ctx, bx, by + dy, 2, '#231c19');
+}
+
+const PAINTERS = { quintal: paintQuintal, praia: paintPraia, neve: paintNeve };
+
+export function paintScene(ctx, W, H, dark, id = 'quintal') {
+  (PAINTERS[id] ?? paintQuintal)(ctx, W, H, dark);
+}
+
+// O que se mexe no fundo, desenhado a cada quadro: nuvens, ou neve caindo.
+export function drawAmbient(ctx, W, H, seconds, dark, id = 'quintal') {
+  if (id !== 'neve') {
+    drawClouds(ctx, W, seconds, dark);
+    return;
+  }
+  const rnd = seeded(5);
+  ctx.fillStyle = dark ? 'rgb(255 255 255 / 0.6)' : 'rgb(255 255 255 / 0.95)';
+  for (let i = 0; i < 46; i++) {
+    const speed = 22 + rnd() * 30;
+    const x = (rnd() * W + Math.sin(seconds * (0.5 + rnd()) + i) * 10 + W) % W;
+    const y = (rnd() * H + seconds * speed) % H;
+    ctx.beginPath();
+    ctx.arc(x, y, 1 + rnd() * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 // Nuvens que atravessam o céu devagar (desenhadas a cada quadro).
-export function drawClouds(ctx, W, seconds, dark) {
+function drawClouds(ctx, W, seconds, dark) {
   ctx.fillStyle = (dark ? NIGHT : DAY).cloud;
   for (const [x0, y, s, speed] of [[40, 40, 1, 5], [210, 76, 0.7, 8], [330, 150, 0.85, 3.5]]) {
     const span = W + 140;
