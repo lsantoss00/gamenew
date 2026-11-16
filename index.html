@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#eaf2ea">
+<title>Miau &amp; Au</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<!-- app -->
+<main class="app">
+  <header class="top">
+    <h1><span class="c">Miau</span> <span class="amp">&amp;</span> <span class="d">Au</span></h1>
+    <div class="scores">
+      <div class="score"><span>Pontos</span><b id="score">0</b></div>
+      <div class="score"><span>Recorde</span><b id="best">0</b></div>
+    </div>
+  </header>
+  <p class="hint">Deslize para juntar bichos iguais. Gato não junta com cachorro, mas quem for 2 níveis maior espanta o outro.</p>
+
+  <div class="board" id="board" tabindex="0" aria-label="Quintal: deslize ou use as setas">
+    <div class="cells" aria-hidden="true">
+      <i></i><i></i><i></i><i></i>
+      <i></i><i></i><i></i><i></i>
+      <i></i><i></i><i></i><i></i>
+      <i></i><i></i><i></i><i></i>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div class="overlay" id="over" hidden>
+      <h2>O quintal lotou</h2>
+      <p>Você fez <b id="final">0</b> pontos.</p>
+      <button class="primary" id="again" type="button">Jogar de novo</button>
+    </div>
+  </div>
+
+  <nav class="actions">
+    <button id="new" type="button">Novo jogo</button>
+    <button id="album-btn" type="button">Álbum</button>
+  </nav>
+</main>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<dialog id="album" aria-labelledby="album-title">
+  <div class="dialog-head">
+    <h2 id="album-title">Álbum</h2>
+    <button id="album-close" type="button">Fechar</button>
+  </div>
+  <h3 class="c">Gatos</h3>
+  <ul class="album" id="album-cat"></ul>
+  <h3 class="d">Cachorros</h3>
+  <ul class="album" id="album-dog"></ul>
+</dialog>
+
+<script type="module" src="js/main.js"></script>
+<!-- /app -->
+</body>
+</html>
