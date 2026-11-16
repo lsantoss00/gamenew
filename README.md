@@ -1,23 +1,22 @@
 # Miau & Au
 
-Puzzle de juntar bichos para celular. Deslize o quintal inteiro: dois bichos iguais viram o próximo da linha (filhotinho → … → leão, ou → … → lobo).
+Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quintal e ele cai e rola; dois iguais que se encostam viram o próximo da linha (filhotinho → … → leão, ou → … → lobo).
 
-Regras próprias do jogo:
-
-- Gato só junta com gato, cachorro só com cachorro.
-- Um bicho 2 níveis (ou mais) maior espanta o da outra espécie em que encostar.
+- Escolha jogar com gatos ou com cachorros; cada espécie tem 10 bichos.
+- Só os 4 menores são soltos; os maiores você consegue juntando.
 - Dois bichos de nível máximo são adotados: somem e dão 5.000 pontos.
+- Se um bicho ficar parado acima da linha tracejada, o quintal lotou e a partida acaba.
 - O álbum guarda todo bicho que você já conseguiu.
 
 ## Rodar
 
 ```
 npm start   # abre em http://localhost:8000
-npm test    # testa as regras
+npm test    # testa as regras e a física
 ```
 
 Não há dependências nem etapa de build: é HTML, CSS e JavaScript puros.
 
-- `js/game.js`: regras (sem tela, testadas em `test/`)
+- `js/game.js`: regras e física (sem tela, testadas em `test/`)
 - `js/art.js`: desenho dos bichos em SVG
-- `js/main.js`: tela, toque, teclado e salvamento
+- `js/main.js`: tela (canvas), toque, teclado e salvamento

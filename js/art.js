@@ -89,7 +89,7 @@ function dog(s) {
 export function animalSVG(kind, level) {
   const spec = (kind === 'cat' ? CATS : DOGS)[level - 1];
   const body = kind === 'cat' ? cat(spec) : dog(spec);
-  return `<svg viewBox="0 0 100 100" aria-hidden="true">${body}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true">${body}</svg>`;
 }
 
 // Gatos em tons quentes, cachorros em tons frios: dá para separar de relance.

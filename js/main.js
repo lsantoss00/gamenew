@@ -1,8 +1,11 @@
-import { createGame, move, SIZE, MAX_LEVEL, KINDS, NAMES, ADOPTION_BONUS } from './game.js';
+import {
+  createGame, drop, step, canDrop, clampAim,
+  W, H, LINE_Y, DROP_Y, DT, RADII, MAX_LEVEL, KINDS, NAMES, ADOPTION_BONUS,
+} from './game.js';
 import { animalSVG, tileColor } from './art.js';
 
-const SLIDE_MS = 110;
 const $ = (id) => document.getElementById(id);
+const fmt = (n) => n.toLocaleString('pt-BR');
 
 // O armazenamento pode falhar (aba anônima, bloqueio): o jogo segue sem salvar.
 const store = {
@@ -22,60 +25,122 @@ const store = {
 };
 
 function validState(s) {
-  return s && s.size === SIZE && Array.isArray(s.tiles) && s.tiles.length > 0 &&
-    s.tiles.every((t) => KINDS.includes(t.kind) && t.level >= 1 && t.level <= MAX_LEVEL &&
-      t.r >= 0 && t.r < SIZE && t.c >= 0 && t.c < SIZE);
+  const level = (n) => Number.isInteger(n) && n >= 1 && n <= MAX_LEVEL;
+  return s && KINDS.includes(s.kind) && Array.isArray(s.bodies) && level(s.current) && level(s.next) &&
+    Number.isFinite(s.score) &&
+    s.bodies.every((b) => level(b.level) && [b.x, b.y, b.px, b.py, b.r, b.r0, b.age, b.angle].every(Number.isFinite));
 }
 
-const saved = store.get('miau.state', null);
-let state = validState(saved) ? saved : createGame();
-let best = store.get('miau.best', 0);
+const saved = store.get('miau.drop', null);
+let state = validState(saved) ? saved : createGame('cat');
+let best = store.get('miau.drop.best', 0);
 const album = store.get('miau.album', { cat: 0, dog: 0 });
+let aim = W / 2;
+let effects = []; // anéis que aparecem onde dois bichos se juntam
 
-const tilesEl = $('tiles');
-const els = new Map(); // id do bicho -> elemento
-let pending = null; // fim da animação da jogada em curso
-let timer = 0;
+const save = () => store.set('miau.drop', state);
 
-function faceHTML(t) {
-  return `${animalSVG(t.kind, t.level)}<span class="badge">${t.level}</span>`;
+// --- Desenho ---
+
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+const sprites = {}; // 'cat3' -> imagem pronta para o canvas
+
+function sprite(kind, level) {
+  const key = kind + level;
+  if (!sprites[key]) {
+    const svg = animalSVG(kind, level).replace('<svg ', '<svg width="200" height="200" ');
+    const img = new Image();
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    sprites[key] = img;
+  }
+  return sprites[key];
 }
 
-function place(el, r, c) {
-  el.style.setProperty('--r', r);
-  el.style.setProperty('--c', c);
+function drawAnimal(level, x, y, r, angle, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fillStyle = tileColor(state.kind, level);
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgb(0 0 0 / 0.18)';
+  ctx.stroke();
+  const img = sprite(state.kind, level);
+  if (img.complete && img.naturalWidth) ctx.drawImage(img, -r * 0.9, -r * 0.9, r * 1.8, r * 1.8);
+  ctx.restore();
 }
 
-function addTile(t, appear) {
-  const el = document.createElement('div');
-  el.className = 'tile';
-  place(el, t.r, t.c);
-  const face = document.createElement('div');
-  face.className = `face${appear ? ' appear' : ''}`;
-  face.style.background = tileColor(t.kind, t.level);
-  face.innerHTML = faceHTML(t);
-  face.title = NAMES[t.kind][t.level - 1];
-  el.append(face);
-  tilesEl.append(el);
-  els.set(t.id, el);
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+}
+new ResizeObserver(resize).observe(canvas);
+
+function draw() {
+  ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  const danger = state.danger > 0 || state.over;
+  ctx.setLineDash([8, 8]);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = danger ? 'rgb(230 40 40 / 0.9)' : 'rgb(255 255 255 / 0.55)';
+  ctx.beginPath();
+  ctx.moveTo(0, LINE_Y);
+  ctx.lineTo(W, LINE_Y);
+  ctx.stroke();
+
+  const ready = canDrop(state);
+  if (ready) {
+    ctx.strokeStyle = 'rgb(255 255 255 / 0.4)';
+    ctx.beginPath();
+    ctx.moveTo(aim, DROP_Y);
+    ctx.lineTo(aim, H);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  for (const b of state.bodies) drawAnimal(b.level, b.x, b.y, b.r, b.angle);
+  if (!state.over) drawAnimal(state.current, aim, DROP_Y, RADII[state.current - 1], 0, ready ? 1 : 0.35);
+
+  for (const e of effects) {
+    const k = e.t / 0.3;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r * (1 + k * 0.5), 0, Math.PI * 2);
+    ctx.lineWidth = 5 * (1 - k);
+    ctx.strokeStyle = `rgb(255 255 255 / ${0.9 * (1 - k)})`;
+    ctx.stroke();
+  }
 }
 
-function renderAll() {
-  tilesEl.replaceChildren();
-  els.clear();
-  for (const t of state.tiles) addTile(t, false);
-  renderScore();
-  $('over').hidden = !state.over;
-  $('final').textContent = state.score.toLocaleString('pt-BR');
+// --- Placar, avisos e álbum ---
+
+function face(kind, level) {
+  return `<div class="face" style="background:${tileColor(kind, level)}">${animalSVG(kind, level)}</div>`;
 }
 
-function renderScore() {
+let shownNext = '';
+function renderHud() {
   if (state.score > best) {
     best = state.score;
-    store.set('miau.best', best);
+    store.set('miau.drop.best', best);
   }
-  $('score').textContent = state.score.toLocaleString('pt-BR');
-  $('best').textContent = best.toLocaleString('pt-BR');
+  $('score').textContent = fmt(state.score);
+  $('best').textContent = fmt(best);
+  const key = state.kind + state.next;
+  if (key !== shownNext) {
+    shownNext = key;
+    $('next').innerHTML = face(state.kind, state.next);
+  }
+  if (state.over && $('over').hidden) {
+    $('final').textContent = fmt(state.score);
+    $('over').hidden = false;
+  }
 }
 
 let toastTimer = 0;
@@ -87,139 +152,128 @@ function toast(text) {
   toastTimer = setTimeout(() => { el.hidden = true; }, 2200);
 }
 
-function updateAlbum() {
-  for (const t of state.tiles) {
-    if (t.level > album[t.kind]) {
-      album[t.kind] = t.level;
-      store.set('miau.album', album);
-      if (t.level > 2) toast(`Novo no álbum: ${NAMES[t.kind][t.level - 1]}`);
-    }
-  }
+function unlock(level, announce) {
+  if (level <= album[state.kind]) return;
+  album[state.kind] = level;
+  store.set('miau.album', album);
+  if (announce) toast(`Novo no álbum: ${NAMES[state.kind][level - 1]}`);
 }
-
-function flush() {
-  if (!pending) return;
-  clearTimeout(timer);
-  const done = pending;
-  pending = null;
-  done();
-}
-
-function play(dir) {
-  flush();
-  const res = move(state, dir);
-  if (!res.moved) return;
-  store.set('miau.state', state);
-  armed = false;
-  $('new').textContent = 'Novo jogo';
-
-  for (const t of state.tiles) {
-    const el = els.get(t.id);
-    if (el) place(el, t.r, t.c);
-  }
-  for (const gone of res.removed) {
-    const el = els.get(gone.id);
-    if (!el) continue;
-    el.classList.add('leaving');
-    place(el, gone.r, gone.c);
-  }
-  for (const id of res.scared) els.get(id)?.classList.add('scared');
-  renderScore();
-  if (res.merged.length || res.adopted.length || res.scared.length) navigator.vibrate?.(12);
-
-  pending = () => {
-    for (const gone of res.removed) {
-      els.get(gone.id)?.remove();
-      els.delete(gone.id);
-    }
-    for (const id of res.merged) {
-      const t = state.tiles.find((x) => x.id === id);
-      const face = els.get(id)?.firstElementChild;
-      if (!t || !face) continue;
-      face.style.background = tileColor(t.kind, t.level);
-      face.innerHTML = faceHTML(t);
-      face.title = NAMES[t.kind][t.level - 1];
-      face.classList.remove('appear', 'pop');
-      void face.offsetWidth; // reinicia a animação
-      face.classList.add('pop');
-    }
-    for (const a of res.adopted) {
-      toast(`${NAMES[a.kind][MAX_LEVEL - 1]} adotado! +${ADOPTION_BONUS.toLocaleString('pt-BR')}`);
-    }
-    if (res.spawned) addTile(res.spawned, true);
-    updateAlbum();
-    if (state.over) {
-      $('final').textContent = state.score.toLocaleString('pt-BR');
-      $('over').hidden = false;
-    }
-  };
-  timer = setTimeout(flush, SLIDE_MS);
-}
-
-function newGame() {
-  flush();
-  state = createGame();
-  store.set('miau.state', state);
-  renderAll();
-}
-
-// --- Controles ---
-
-const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', a: 'left', d: 'right', w: 'up', s: 'down' };
-window.addEventListener('keydown', (e) => {
-  const dir = KEYS[e.key];
-  if (!dir || $('album').open) return;
-  e.preventDefault();
-  play(dir);
-});
-
-const board = $('board');
-let start = null;
-board.addEventListener('pointerdown', (e) => {
-  start = { x: e.clientX, y: e.clientY };
-  board.setPointerCapture?.(e.pointerId);
-});
-board.addEventListener('pointerup', (e) => {
-  if (!start) return;
-  const dx = e.clientX - start.x;
-  const dy = e.clientY - start.y;
-  start = null;
-  if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
-  play(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
-});
-board.addEventListener('pointercancel', () => { start = null; });
-
-// "Novo jogo" pede um segundo toque quando há uma partida em andamento.
-let armed = false;
-$('new').addEventListener('click', () => {
-  if (!armed && !state.over && state.score > 0) {
-    armed = true;
-    $('new').textContent = 'Toque de novo para recomeçar';
-    return;
-  }
-  armed = false;
-  $('new').textContent = 'Novo jogo';
-  newGame();
-});
-$('again').addEventListener('click', newGame);
 
 function renderAlbum() {
   for (const kind of KINDS) {
     $(`album-${kind}`).innerHTML = NAMES[kind].map((name, i) => {
-      const level = i + 1;
-      const got = level <= album[kind];
+      const got = i + 1 <= album[kind];
       return `<li class="${got ? '' : 'locked'}">` +
-        `<div class="face" style="background:${got ? tileColor(kind, level) : 'var(--cell)'}">` +
-        `${got ? animalSVG(kind, level) : '<span class="q">?</span>'}</div>` +
+        (got ? face(kind, i + 1) : '<div class="face"><span class="q">?</span></div>') +
         `<span>${got ? name : '???'}</span></li>`;
     }).join('');
   }
 }
+
+// --- Laço do jogo ---
+
+function handle(events) {
+  if (!events.length) return;
+  for (const e of events) {
+    effects.push({ x: e.x, y: e.y, r: RADII[e.level - 1], t: 0 });
+    if (e.type === 'adopt') toast(`${NAMES[state.kind][MAX_LEVEL - 1]} adotado! +${fmt(ADOPTION_BONUS)}`);
+    else unlock(e.level, true);
+  }
+  navigator.vibrate?.(12);
+  save();
+}
+
+let last = performance.now();
+let acc = 0;
+function frame(now) {
+  const elapsed = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  acc += elapsed;
+  const wasOver = state.over;
+  while (acc >= DT) {
+    handle(step(state, DT));
+    acc -= DT;
+  }
+  if (state.over && !wasOver) save();
+  for (const e of effects) e.t += elapsed;
+  effects = effects.filter((e) => e.t < 0.3);
+  renderHud();
+  draw();
+  requestAnimationFrame(frame);
+}
+
+function release() {
+  if (!drop(state, aim)) return;
+  unlock(state.current, false);
+  aim = clampAim(state.current, aim);
+  save();
+}
+
+function newGame(kind) {
+  state = createGame(kind);
+  aim = W / 2;
+  effects = [];
+  $('over').hidden = true;
+  unlock(Math.max(state.current, state.next), false);
+  save();
+}
+
+// --- Controles ---
+
+const toAim = (e) => {
+  const rect = canvas.getBoundingClientRect();
+  aim = clampAim(state.current, ((e.clientX - rect.left) / rect.width) * W);
+};
+let aiming = false;
+canvas.addEventListener('pointerdown', (e) => {
+  aiming = true;
+  canvas.setPointerCapture?.(e.pointerId);
+  toAim(e);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (aiming || e.pointerType === 'mouse') toAim(e);
+});
+canvas.addEventListener('pointerup', (e) => {
+  if (!aiming) return;
+  aiming = false;
+  toAim(e);
+  release();
+});
+canvas.addEventListener('pointercancel', () => { aiming = false; });
+
+window.addEventListener('keydown', (e) => {
+  if (document.querySelector('dialog[open]')) return;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    aim = clampAim(state.current, aim + (e.key === 'ArrowLeft' ? -14 : 14));
+  } else if (e.key === ' ' || e.key === 'ArrowDown') {
+    release();
+  } else {
+    return;
+  }
+  e.preventDefault();
+});
+
+for (const kind of KINDS) {
+  for (const btn of document.querySelectorAll(`[data-kind="${kind}"]`)) {
+    btn.insertAdjacentHTML('afterbegin', face(kind, 1));
+    btn.addEventListener('click', () => {
+      $('chooser').close();
+      newGame(kind);
+    });
+  }
+}
+$('new').addEventListener('click', () => $('chooser').showModal());
+$('chooser-close').addEventListener('click', () => $('chooser').close());
 $('album-btn').addEventListener('click', () => {
   renderAlbum();
   $('album').showModal();
 });
 $('album-close').addEventListener('click', () => $('album').close());
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) save();
+});
 
-renderAll();
-updateAlbum();
+unlock(Math.max(state.current, state.next, ...state.bodies.map((b) => b.level)), false);
+aim = clampAim(state.current, aim);
+resize();
+requestAnimationFrame(frame);

@@ -1,99 +1,113 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, move, canMove, SIZE, MAX_LEVEL, ADOPTION_BONUS, SCARE_GAP } from '../js/game.js';
+import {
+  createGame, drop, step, canDrop, W, H, LINE_Y, RADII, MAX_LEVEL, ADOPTION_BONUS, DT,
+} from '../js/game.js';
 
-function board(tiles) {
-  return {
-    size: SIZE,
-    score: 0,
-    over: false,
-    nextId: tiles.length + 1,
-    tiles: tiles.map(([kind, level, r, c], i) => ({ id: i + 1, kind, level, r, c })),
-  };
+function run(state, seconds) {
+  const events = [];
+  for (let i = 0; i < seconds / DT; i++) events.push(...step(state));
+  return events;
 }
 
-const byId = (s, id) => s.tiles.find((t) => t.id === id);
+function dropLevel(state, level, x) {
+  state.current = level;
+  state.cooldown = 0;
+  return drop(state, x);
+}
 
-test('jogo novo começa com um gato e um cachorro', () => {
+function body(state, level, x, y) {
+  const r = RADII[level - 1];
+  const b = { id: state.nextId++, level, x, y, px: x, py: y, r, r0: r, age: 5, angle: 0 };
+  state.bodies.push(b);
+  return b;
+}
+
+test('jogo novo sorteia só os bichos pequenos', () => {
+  for (let i = 0; i < 50; i++) {
+    const s = createGame('dog');
+    assert.ok(s.current >= 1 && s.current <= 4);
+    assert.ok(s.next >= 1 && s.next <= 4);
+  }
+});
+
+test('bicho solto cai e para no chão, dentro do cercado', () => {
   const s = createGame();
-  assert.deepEqual(s.tiles.map((t) => t.kind).sort(), ['cat', 'dog']);
+  const b = dropLevel(s, 3, -50); // mira fora: é trazida para dentro
+  run(s, 2);
+  assert.ok(Math.abs(b.y - (H - b.r)) < 0.5, `y=${b.y}`);
+  assert.ok(b.x >= b.r && b.x <= W - b.r);
 });
 
-test('bichos iguais se juntam e sobem de nível', () => {
-  const s = board([['cat', 1, 0, 1], ['cat', 1, 0, 3]]);
-  const res = move(s, 'left');
-  assert.equal(res.moved, true);
-  assert.deepEqual(res.merged, [1]);
-  assert.deepEqual(res.removed, [{ id: 2, r: 0, c: 0 }]);
-  assert.equal(byId(s, 1).level, 2);
-  assert.equal(byId(s, 1).c, 0);
-  assert.equal(s.score, 4);
-  assert.equal(s.tiles.length, 2); // o que juntou + o novo
+test('há uma pausa entre um bicho e o próximo', () => {
+  const s = createGame();
+  drop(s, 100);
+  assert.equal(canDrop(s), false);
+  assert.equal(drop(s, 100), null);
+  run(s, 0.5);
+  assert.equal(canDrop(s), true);
 });
 
-test('gato não junta com cachorro', () => {
-  const s = board([['cat', 1, 2, 0], ['dog', 1, 2, 1]]);
-  const res = move(s, 'left');
-  assert.equal(res.moved, false);
-  assert.equal(res.spawned, null);
-  assert.equal(s.tiles.length, 2);
+test('dois iguais que se encostam viram o próximo', () => {
+  const s = createGame();
+  dropLevel(s, 2, 180);
+  run(s, 1);
+  dropLevel(s, 2, 180);
+  const events = run(s, 1.5);
+  assert.deepEqual(s.bodies.map((b) => b.level), [3]);
+  assert.equal(s.score, 8);
+  assert.equal(events.filter((e) => e.type === 'merge').length, 1);
 });
 
-test('bicho bem maior espanta o menor da outra espécie', () => {
-  // o maior está parado e o menor desliza até ele
-  let s = board([['cat', 1 + SCARE_GAP, 0, 0], ['dog', 1, 0, 2]]);
-  let res = move(s, 'left');
-  assert.equal(res.scared.length, 1);
-  assert.equal(byId(s, 2), undefined);
-  assert.equal(byId(s, 1).c, 0);
-  assert.equal(s.score, 0);
-
-  // o maior desliza e toma a casa do menor
-  s = board([['dog', 1, 0, 0], ['cat', 1 + SCARE_GAP, 0, 3]]);
-  res = move(s, 'left');
-  assert.equal(byId(s, 1), undefined);
-  assert.equal(byId(s, 2).c, 0);
-
-  // diferença pequena: ninguém se espanta
-  s = board([['dog', 1, 0, 0], ['cat', SCARE_GAP, 0, 1]]);
-  assert.equal(move(s, 'left').moved, false);
+test('bichos diferentes não se juntam nem ficam um dentro do outro', () => {
+  const s = createGame();
+  dropLevel(s, 4, 170);
+  run(s, 1);
+  dropLevel(s, 2, 190);
+  run(s, 3);
+  const [a, b] = s.bodies;
+  assert.equal(s.bodies.length, 2);
+  assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= a.r + b.r - 1);
 });
 
-test('um bicho só junta uma vez por jogada', () => {
-  const s = board([['dog', 1, 0, 0], ['dog', 1, 0, 1], ['dog', 1, 0, 2], ['dog', 1, 0, 3]]);
-  move(s, 'right');
-  const row = s.tiles.filter((t) => t.id <= 4).sort((a, b) => a.c - b.c);
-  assert.deepEqual(row.map((t) => [t.level, t.c]), [[2, 2], [2, 3]]);
-});
-
-test('funciona nas quatro direções', () => {
-  for (const [dir, r, c] of [['up', 0, 2], ['down', 3, 2], ['left', 2, 0], ['right', 2, 3]]) {
-    const s = board([['cat', 3, 2, 2]]);
-    move(s, dir);
-    assert.deepEqual([byId(s, 1).r, byId(s, 1).c], [r, c], dir);
-  }
-});
-
-test('dois de nível máximo são adotados e liberam a casa', () => {
-  const s = board([['cat', MAX_LEVEL, 0, 0], ['cat', MAX_LEVEL, 0, 1], ['dog', 1, 0, 2]]);
-  const res = move(s, 'left');
-  assert.equal(res.adopted.length, 1);
+test('dois de nível máximo são adotados', () => {
+  const s = createGame();
+  const r = RADII[MAX_LEVEL - 1];
+  body(s, MAX_LEVEL, r, H - r);
+  body(s, MAX_LEVEL, 3 * r - 1, H - r);
+  const events = run(s, 0.1);
+  assert.equal(s.bodies.length, 0);
   assert.equal(s.score, ADOPTION_BONUS);
-  assert.equal(byId(s, 1), undefined);
-  assert.equal(byId(s, 2), undefined);
-  assert.equal(byId(s, 3).c, 0);
+  assert.equal(events[0].type, 'adopt');
 });
 
-test('fim de jogo quando a grade enche sem jogada possível', () => {
-  const tiles = [];
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) tiles.push([(r + c) % 2 ? 'cat' : 'dog', 1, r, c]);
+test('uma pilha grande fica estável, sem bicho atravessando o cercado', () => {
+  const s = createGame();
+  let seed = 7;
+  const rng = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 40 && !s.over; i++) {
+    drop(s, rng() * W, rng);
+    run(s, 0.6);
   }
-  const s = board(tiles);
-  assert.equal(canMove(s), false);
-  s.tiles[0].kind = 'cat';
-  assert.equal(canMove(s), true);
-  s.tiles[0].kind = 'dog';
-  s.tiles[0].level = 1 + SCARE_GAP; // ainda dá para espantar um vizinho
-  assert.equal(canMove(s), true);
+  run(s, 2);
+  for (const b of s.bodies) {
+    assert.ok(b.x >= b.r - 0.01 && b.x <= W - b.r + 0.01 && b.y <= H - b.r + 0.01);
+    assert.ok(Math.hypot(b.x - b.px, b.y - b.py) < 0.5, 'pilha ainda se mexendo');
+  }
+});
+
+test('fim de jogo quando um bicho fica parado acima da linha', () => {
+  const s = createGame();
+  let y = H;
+  for (const level of [10, 9, 8]) {
+    const r = RADII[level - 1];
+    body(s, level, W / 2, y - r);
+    y -= 2 * r;
+  }
+  assert.ok(y < LINE_Y);
+  run(s, 1);
+  assert.equal(s.over, false); // ainda dá tempo de salvar
+  run(s, 1);
+  assert.equal(s.over, true);
+  assert.equal(drop(s, 100), null);
 });
