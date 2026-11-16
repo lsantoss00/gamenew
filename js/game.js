@@ -7,9 +7,13 @@ export const LINE_Y = 100; // bicho parado acima desta linha = quintal lotado
 export const DROP_Y = 52; // altura de onde o bicho é solto
 export const MAX_LEVEL = 10;
 export const KINDS = ['cat', 'dog'];
-export const RADII = [15, 21, 28, 34, 42, 51, 61, 72, 84, 98];
+export const RADII = [17, 24, 31, 38, 47, 57, 68, 80, 93, 108];
 export const ADOPTION_BONUS = 5000;
+export const SCARE_BONUS = 50; // pontos por intruso espantado
 export const DROP_COOLDOWN = 0.45; // segundos entre um bicho solto e o próximo
+export const COMBO_WINDOW = 1.2; // segundos para a próxima junção contar como combo
+export const WARNING_TIME = 1.2; // segundos de aviso antes de um intruso cair
+export const FIRST_RIVAL = 6; // quantos bichos soltos até o primeiro intruso
 export const DT = 1 / 240; // passo fixo da física
 
 export const NAMES = {
@@ -23,6 +27,7 @@ const FLOOR_GRIP = 0.9; // quanto da velocidade lateral sobra ao arrastar no ch�
 const MAX_STEP = 12; // deslocamento máximo por passo, para a pilha não explodir
 const ITERATIONS = 4;
 const PUSH_SPEED = 1.5; // deslocamento por passo que um empurrão pode dar a um bicho parado
+const POP = 2.2; // empurrão que uma junção dá nos vizinhos
 const GROW = 0.12; // segundos que um bicho recém-juntado leva para crescer
 const SETTLE = 1.2; // idade a partir da qual o bicho conta para a linha
 const DANGER_LIMIT = 1.6; // segundos acima da linha até o fim de jogo
@@ -37,22 +42,41 @@ function pickLevel(rng) {
   return 1;
 }
 
+// Tempo para soltar cada bicho: começa folgado e aperta ao longo da partida.
+export function dropTime(state) {
+  return Math.max(1.5, 4 - state.drops * 0.025);
+}
+
+// De quantos em quantos bichos soltos cai um intruso.
+export function rivalInterval(state) {
+  return Math.max(3, 7 - Math.floor(state.drops / 20));
+}
+
 export function createGame(kind = 'cat', rng = Math.random) {
-  return {
+  const state = {
     kind,
     bodies: [],
     score: 0,
     nextId: 1,
     current: pickLevel(rng),
     next: pickLevel(rng),
+    aim: W / 2,
+    drops: 0,
+    timer: 0,
     cooldown: 0,
+    combo: 0,
+    comboT: 0,
+    rivalAt: FIRST_RIVAL,
+    warning: null, // { x, level, t }: intruso prestes a cair
     danger: 0,
     over: false,
   };
+  state.timer = dropTime(state);
+  return state;
 }
 
 function makeBody(state, level, x, y, r0) {
-  return { id: state.nextId++, level, x, y, px: x, py: y, r: r0, r0, age: 0, angle: 0 };
+  return { id: state.nextId++, level, x, y, px: x, py: y, r: r0, r0, age: 0, angle: 0, rival: false };
 }
 
 export function clampAim(level, x) {
@@ -64,7 +88,7 @@ export function canDrop(state) {
   return !state.over && state.cooldown <= 0;
 }
 
-export function drop(state, x, rng = Math.random) {
+export function drop(state, x = state.aim, rng = Math.random) {
   if (!canDrop(state)) return null;
   const level = state.current;
   // Um desvio mínimo evita torres perfeitamente equilibradas quando se solta sempre no mesmo ponto.
@@ -72,18 +96,30 @@ export function drop(state, x, rng = Math.random) {
   state.bodies.push(body);
   state.current = state.next;
   state.next = pickLevel(rng);
+  state.aim = clampAim(state.current, x);
   state.cooldown = DROP_COOLDOWN;
+  state.drops++;
+  state.timer = dropTime(state);
+  if (state.drops >= state.rivalAt && !state.warning) {
+    const rivalLevel = 1 + Math.floor(rng() * 3);
+    const r = RADII[rivalLevel - 1];
+    state.warning = { x: r + rng() * (W - 2 * r), level: rivalLevel, t: WARNING_TIME };
+    state.rivalAt = state.drops + rivalInterval(state);
+  }
   return body;
 }
 
 /**
- * Avança a física em `dt` segundos. Devolve o que aconteceu, para a tela animar:
- * { type: 'merge' | 'adopt', x, y, level }.
+ * Avança só a física em `dt` segundos. Devolve o que aconteceu, para a tela animar:
+ *  - { type: 'merge', x, y, level, gained, combo }
+ *  - { type: 'adopt', x, y, level, gained }
+ *  - { type: 'scare', x, y, gained }: intruso espantado por uma junção ao lado
  */
 export function step(state, dt = DT) {
   const events = [];
   if (state.over) return events;
   state.cooldown = Math.max(0, state.cooldown - dt);
+  state.comboT = Math.max(0, state.comboT - dt);
 
   const bodies = state.bodies;
   const limits = new Map(); // velocidade máxima de cada bicho ao fim do passo
@@ -108,6 +144,7 @@ export function step(state, dt = DT) {
 
   const dead = new Set();
   const born = [];
+  const pops = []; // junções deste passo: { x, y, r, level }
   for (let it = 0; it < ITERATIONS; it++) {
     for (let i = 0; i < bodies.length; i++) {
       const a = bodies[i];
@@ -120,20 +157,25 @@ export function step(state, dt = DT) {
         const d = Math.hypot(dx, dy);
         const min = a.r + b.r;
 
-        if (a.level === b.level && d < min + 0.5) {
+        if (a.level === b.level && !a.rival && !b.rival && d < min + 0.5) {
           dead.add(a);
           dead.add(b);
           const x = (a.x + b.x) / 2;
           const y = (a.y + b.y) / 2;
           if (a.level >= MAX_LEVEL) {
             state.score += ADOPTION_BONUS;
-            events.push({ type: 'adopt', x, y, level: a.level });
+            pops.push({ x, y, r: RADII[MAX_LEVEL - 1] * 1.3, level: 0 });
+            events.push({ type: 'adopt', x, y, level: a.level, gained: ADOPTION_BONUS });
           } else {
             const level = a.level + 1;
             const r = RADII[level - 1];
             born.push(makeBody(state, level, Math.min(W - r, Math.max(r, x)), Math.min(H - r, y), a.r));
-            state.score += 2 ** level;
-            events.push({ type: 'merge', x, y, level });
+            state.combo = state.comboT > 0 ? state.combo + 1 : 1;
+            state.comboT = COMBO_WINDOW;
+            const gained = 2 ** level * state.combo;
+            state.score += gained;
+            pops.push({ x, y, r, level });
+            events.push({ type: 'merge', x, y, level, gained, combo: state.combo });
           }
           break;
         }
@@ -173,6 +215,26 @@ export function step(state, dt = DT) {
     }
   }
 
+  // Cada junção espanta os intrusos encostados e dá um tranco nos vizinhos.
+  for (const pop of pops) {
+    for (const b of bodies) {
+      if (dead.has(b)) continue;
+      const dx = b.x - pop.x;
+      const dy = b.y - pop.y;
+      const d = Math.hypot(dx, dy);
+      if (d > pop.r + b.r + 10) continue;
+      if (b.rival) {
+        dead.add(b);
+        state.score += SCARE_BONUS;
+        events.push({ type: 'scare', x: b.x, y: b.y, gained: SCARE_BONUS });
+      } else if (d > 1 && b.level !== pop.level) { // quem vai juntar em seguida não é afastado
+        const k = POP * Math.min(1, (pop.r * pop.r) / (b.r * b.r));
+        b.px -= (dx / d) * k;
+        b.py -= (dy / d) * k;
+      }
+    }
+  }
+
   if (dead.size || born.length) {
     state.bodies = bodies.filter((b) => !dead.has(b)).concat(born);
   }
@@ -180,5 +242,37 @@ export function step(state, dt = DT) {
   const above = state.bodies.some((b) => b.age > SETTLE && b.y - b.r < LINE_Y);
   state.danger = above ? state.danger + dt : 0;
   if (state.danger > DANGER_LIMIT) state.over = true;
+  return events;
+}
+
+/**
+ * Física + ritmo da partida: o relógio que solta o bicho sozinho e a queda dos
+ * intrusos. Além dos eventos de `step`, devolve { type: 'autodrop' } e
+ * { type: 'rival', x }.
+ */
+export function tick(state, dt = DT, rng = Math.random) {
+  const events = step(state, dt);
+  if (state.over) return events;
+
+  if (state.warning) {
+    state.warning.t -= dt;
+    if (state.warning.t <= 0) {
+      const { x, level } = state.warning;
+      const r = RADII[level - 1];
+      const body = makeBody(state, level, x, -r, r);
+      body.rival = true;
+      state.bodies.push(body);
+      state.warning = null;
+      events.push({ type: 'rival', x });
+    }
+  }
+
+  if (canDrop(state)) {
+    state.timer -= dt;
+    if (state.timer <= 0) {
+      drop(state, state.aim, rng);
+      events.push({ type: 'autodrop' });
+    }
+  }
   return events;
 }

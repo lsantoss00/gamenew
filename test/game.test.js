@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, drop, step, canDrop, W, H, LINE_Y, RADII, MAX_LEVEL, ADOPTION_BONUS, DT,
+  createGame, drop, step, tick, canDrop, dropTime, W, H, LINE_Y, RADII, MAX_LEVEL, ADOPTION_BONUS, SCARE_BONUS,
+  FIRST_RIVAL, WARNING_TIME, DT,
 } from '../js/game.js';
 
 function run(state, seconds) {
@@ -18,7 +19,7 @@ function dropLevel(state, level, x) {
 
 function body(state, level, x, y) {
   const r = RADII[level - 1];
-  const b = { id: state.nextId++, level, x, y, px: x, py: y, r, r0: r, age: 5, angle: 0 };
+  const b = { id: state.nextId++, level, x, y, px: x, py: y, r, r0: r, age: 5, angle: 0, rival: false };
   state.bodies.push(b);
   return b;
 }
@@ -110,4 +111,59 @@ test('fim de jogo quando um bicho fica parado acima da linha', () => {
   run(s, 1);
   assert.equal(s.over, true);
   assert.equal(drop(s, 100), null);
+});
+
+test('juntar em sequência vale combo', () => {
+  const s = createGame();
+  // dois filhotes se juntam ao lado de um gatinho: o novo gatinho junta com ele em seguida
+  body(s, 1, 100, H - RADII[0]);
+  body(s, 1, 100 + 2 * RADII[0] - 1, H - RADII[0]);
+  body(s, 2, 160, H - RADII[1]);
+  const events = run(s, 1).filter((e) => e.type === 'merge');
+  assert.deepEqual(events.map((e) => [e.level, e.combo]), [[2, 1], [3, 2]]);
+  assert.equal(s.score, 4 + 8 * 2);
+});
+
+test('intruso não junta, e vai embora quando há uma junção encostada nele', () => {
+  const s = createGame();
+  const r = RADII[1];
+  const rival = body(s, 2, 60, H - r);
+  rival.rival = true;
+  body(s, 2, 60 + 2 * r - 1, H - r); // mesmo nível, encostado: não junta com intruso
+  run(s, 0.5);
+  assert.equal(s.bodies.length, 2);
+  assert.equal(s.score, 0);
+
+  dropLevel(s, 2, 60 + 2 * r);
+  const events = run(s, 1.5);
+  assert.equal(events.filter((e) => e.type === 'scare').length, 1);
+  assert.deepEqual(s.bodies.map((b) => [b.level, b.rival]), [[3, false]]);
+  assert.equal(s.score, 8 + SCARE_BONUS);
+});
+
+test('o relógio solta o bicho sozinho, na mira atual', () => {
+  const s = createGame();
+  s.aim = 80;
+  const t = dropTime(s);
+  for (let i = 0; i < (t - 0.1) / DT; i++) tick(s);
+  assert.equal(s.bodies.length, 0);
+  for (let i = 0; i < 0.2 / DT; i++) tick(s);
+  assert.equal(s.bodies.length, 1);
+  assert.ok(Math.abs(s.bodies[0].x - 80) <= 1);
+  assert.ok(dropTime(s) < t);
+});
+
+test('depois de alguns bichos cai um intruso, com aviso antes', () => {
+  const s = createGame();
+  for (let i = 0; i < FIRST_RIVAL; i++) {
+    assert.equal(s.warning, null);
+    s.cooldown = 0;
+    drop(s, 40 + i * 50);
+  }
+  assert.ok(s.warning);
+  const events = [];
+  for (let i = 0; i < (WARNING_TIME + 0.05) / DT; i++) events.push(...tick(s));
+  assert.equal(events.filter((e) => e.type === 'rival').length, 1);
+  assert.equal(s.bodies.filter((b) => b.rival).length, 1);
+  assert.equal(s.warning, null);
 });

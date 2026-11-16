@@ -18,11 +18,13 @@
       <div class="score"><span>Recorde</span><b id="best">0</b></div>
     </div>
   </header>
-  <p class="hint">Arraste para mirar e solte. Dois bichos iguais que se encostam viram um maior.</p>
+  <div class="info">
+    <p class="hint">Mire e solte antes que o tempo acabe. Dois iguais viram um maior, e juntar ao lado de um intruso espanta ele.</p>
+    <div class="next" aria-hidden="true"><span>Próximo</span><div id="next"></div></div>
+  </div>
 
   <div class="stage">
     <canvas id="canvas" tabindex="0" aria-label="Quintal: arraste para mirar e solte, ou use as setas e a barra de espaço"></canvas>
-    <div class="next" aria-hidden="true"><span>Próximo</span><div id="next"></div></div>
     <div class="overlay" id="over" hidden>
       <h2>O quintal lotou</h2>
       <p>Você fez <b id="final">0</b> pontos. Jogar de novo com:</p>
@@ -36,6 +38,7 @@
   <nav class="actions">
     <button id="new" type="button">Novo jogo</button>
     <button id="album-btn" type="button">Álbum</button>
+    <button id="sound" type="button" aria-pressed="true">Com som</button>
   </nav>
 </main>
 
