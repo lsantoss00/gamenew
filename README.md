@@ -25,4 +25,4 @@ Não há dependências nem etapa de build: é HTML, CSS e JavaScript puros.
 - `js/scene.js`: cenário do quintal (dia e noite)
 - `js/fx.js`: partículas e efeitos visuais
 - `js/main.js`: tela (canvas), toque, teclado e salvamento
-- `js/sound.js`: efeitos sonoros sintetizados
+- `js/sound.js`: efeitos sonoros e música de fundo, sintetizados

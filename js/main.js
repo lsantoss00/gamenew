@@ -5,7 +5,7 @@ import {
 import { animalSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
 import { paintScene, drawClouds } from './scene.js';
 import { burst, dust, poof, confetti, fling, updateFx, drawFx, clearFx } from './fx.js';
-import { sfx, setSound, unlockAudio } from './sound.js';
+import { sfx, setAudioMode, unlockAudio, startMusic, stopMusic, setMusicTension } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString('pt-BR');
@@ -41,8 +41,11 @@ const album = store.get('miau.album', { cat: 0, dog: 0 });
 let effects = []; // anéis e textos que aparecem onde algo acontece
 let shake = 0; // segundos de tremor que restam
 let active = false; // o relógio só corre depois do primeiro toque nesta visita
-let soundOn = store.get('miau.sound', true);
-setSound(soundOn);
+const AUDIO_MODES = ['all', 'sfx', 'off'];
+const AUDIO_LABELS = { all: 'Som e música', sfx: 'Só efeitos', off: 'Sem som' };
+let audioMode = store.get('miau.audio', store.get('miau.sound', true) ? 'all' : 'off');
+if (!AUDIO_MODES.includes(audioMode)) audioMode = 'all';
+setAudioMode(audioMode);
 const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const save = () => store.set('miau.drop', state);
@@ -484,6 +487,7 @@ function frame(now) {
     sfx.over();
     save();
   }
+  setMusicTension(state.danger > 0 && !state.over);
   tutorialTick(elapsed);
   shake = Math.max(0, shake - elapsed);
   for (const e of effects) e.t += elapsed;
@@ -581,19 +585,23 @@ $('album-btn').addEventListener('click', () => {
 $('album-close').addEventListener('click', () => $('album').close());
 const soundBtn = $('sound');
 function renderSound() {
-  soundBtn.textContent = soundOn ? 'Com som' : 'Sem som';
-  soundBtn.setAttribute('aria-pressed', String(soundOn));
+  soundBtn.textContent = AUDIO_LABELS[audioMode];
 }
-soundBtn.addEventListener('click', () => {
-  soundOn = !soundOn;
-  setSound(soundOn);
-  store.set('miau.sound', soundOn);
+soundBtn.addEventListener('click', () => { // alterna: som e música -> só efeitos -> sem som
+  audioMode = AUDIO_MODES[(AUDIO_MODES.indexOf(audioMode) + 1) % AUDIO_MODES.length];
+  store.set('miau.audio', audioMode);
   unlockAudio();
+  setAudioMode(audioMode);
   renderSound();
 });
 renderSound();
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) save();
+  if (document.hidden) {
+    save();
+    stopMusic();
+  } else {
+    startMusic();
+  }
 });
 
 unlock(Math.max(state.current, state.next, ...state.bodies.map((b) => b.level)), false);
