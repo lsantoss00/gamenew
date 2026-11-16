@@ -49,6 +49,8 @@ let missions = validMissions(savedMissions) ? savedMissions : dailyMissions();
 let effects = []; // anéis e textos que aparecem onde algo acontece
 let shake = 0; // segundos de tremor que restam
 let active = false; // o relógio só corre depois do primeiro toque nesta visita
+let screen = 'menu'; // 'menu' ou 'game'
+let paused = false;
 const AUDIO_MODES = ['all', 'sfx', 'off'];
 const AUDIO_LABELS = { all: 'Som e música', sfx: 'Só efeitos', off: 'Sem som' };
 let audioMode = store.get('miau.audio', store.get('miau.sound', true) ? 'all' : 'off');
@@ -104,21 +106,22 @@ function isDark() {
   return forced ? forced === 'dark' : darkMq.matches;
 }
 
-// O cenário é pintado uma vez e reaproveitado até a tela ou o tema mudarem.
-let backdrop = null;
-let backdropKey = '';
-function scene() {
-  const key = `${canvas.width}x${canvas.height}:${isDark()}:${meta.scene}`;
-  if (key !== backdropKey && canvas.width && canvas.height) {
-    backdrop = document.createElement('canvas');
-    backdrop.width = canvas.width;
-    backdrop.height = canvas.height;
+// O cenário é pintado uma vez por tamanho e reaproveitado até o tema ou o cenário mudarem.
+const backdrops = new Map();
+function scene(width = canvas.width, height = canvas.height) {
+  if (!width || !height) return null;
+  const key = `${width}x${height}:${isDark()}:${meta.scene}`;
+  if (!backdrops.has(key)) {
+    if (backdrops.size > 6) backdrops.clear();
+    const backdrop = document.createElement('canvas');
+    backdrop.width = width;
+    backdrop.height = height;
     const c = backdrop.getContext('2d');
-    c.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+    c.setTransform(width / W, 0, 0, height / H, 0, 0);
     paintScene(c, W, H, isDark(), meta.scene);
-    backdropKey = key;
+    backdrops.set(key, backdrop);
   }
-  return backdrop;
+  return backdrops.get(key);
 }
 
 function resize() {
@@ -369,6 +372,59 @@ function renderAlbum() {
   }
 }
 
+// --- Telas: menu e jogo ---
+
+const menuCanvas = $('menu-canvas');
+const menuCtx = menuCanvas.getContext('2d');
+
+// Há partida para continuar? (começada e ainda não terminada)
+const hasGame = () => !state.over && state.drops > 0;
+
+function renderMenu() {
+  const going = hasGame();
+  $('continue').hidden = !going;
+  $('continue-info').textContent = going
+    ? `${state.kind === 'cat' ? 'Gatos' : 'Cachorros'} · ${fmt(state.score)} pontos` : '';
+  $('play').textContent = going ? 'Nova partida' : 'Jogar';
+  $('play').classList.toggle('primary', !going);
+  $('play').classList.toggle('big', !going);
+  $('menu-best').textContent = fmt(best);
+  renderCoins(false);
+  renderMissionCount();
+}
+
+function show(name) {
+  screen = name;
+  $('menu').hidden = name !== 'menu';
+  $('game').hidden = name !== 'game';
+  if (name === 'menu') {
+    save();
+    refreshMissions();
+    renderMenu();
+  } else {
+    resize();
+    canvas.focus({ preventScroll: true });
+  }
+}
+
+function drawMenu(seconds) {
+  const back = scene(menuCanvas.width, menuCanvas.height);
+  menuCtx.setTransform(1, 0, 0, 1, 0, 0);
+  menuCtx.drawImage(back, 0, 0);
+  menuCtx.setTransform(menuCanvas.width / W, 0, 0, menuCanvas.height / H, 0, 0);
+  drawAmbient(menuCtx, W, H, calm.matches ? 0 : seconds, isDark(), meta.scene);
+}
+
+// Bichos pulando na frente do cenário do menu.
+$('parade').innerHTML = [['dog', 2, 62, 0.5], ['cat', 5, 84, 0.1], ['dog', 6, 104, 0.8], ['cat', 2, 70, 0.3], ['dog', 4, 86, 1.1], ['cat', 10, 100, 0.6]]
+  .map(([kind, level, size, delay]) => `<div style="--size:${size}px;--delay:${delay}s">${animalSVG(kind, level, 'happy')}</div>`).join('');
+
+function pause() {
+  if (screen !== 'game' || state.over || document.querySelector('dialog[open]')) return;
+  paused = true;
+  $('pause-dialog').showModal();
+}
+
 // --- Moedas, missões e loja ---
 
 const COIN = '<svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f5b301" stroke="#b97d00" stroke-width="1.6"/><ellipse cx="12" cy="14.6" rx="4.2" ry="3.4" fill="#b97d00"/><circle cx="6.9" cy="10.6" r="1.7" fill="#b97d00"/><circle cx="10.2" cy="7.6" r="1.7" fill="#b97d00"/><circle cx="13.8" cy="7.6" r="1.7" fill="#b97d00"/><circle cx="17.1" cy="10.6" r="1.7" fill="#b97d00"/></svg>';
@@ -591,33 +647,37 @@ let announced = null; // último aviso de intruso já anunciado
 function frame(now) {
   const elapsed = Math.min(0.05, (now - last) / 1000);
   last = now;
-  acc += elapsed;
-  const wasOver = state.over;
-  while (acc >= DT) {
-    handle(clockOn() ? tick(state, DT) : step(state, DT));
-    acc -= DT;
+  if (screen === 'menu') {
+    drawMenu(now / 1000);
+  } else if (!paused) {
+    acc += elapsed;
+    const wasOver = state.over;
+    while (acc >= DT) {
+      handle(clockOn() ? tick(state, DT) : step(state, DT));
+      acc -= DT;
+    }
+    if (state.warning && state.warning !== announced) { // aviso novo, venha de onde vier
+      sfx.warning();
+      tip('rival');
+    }
+    announced = state.warning;
+    if (state.over && !wasOver) {
+      sfx.over();
+      track('game');
+      track('kind', state.kind);
+      $('earned').textContent = `+${fmt(payout())}`;
+      save();
+    }
+    setMusicTension(state.danger > 0 && !state.over);
+    tutorialTick(elapsed);
+    shake = Math.max(0, shake - elapsed);
+    for (const e of effects) e.t += elapsed;
+    effects = effects.filter((e) => e.t < e.life);
+    trackImpacts(elapsed);
+    updateFx(elapsed);
+    renderHud();
+    draw(now / 1000);
   }
-  if (state.warning && state.warning !== announced) { // aviso novo, venha de onde vier
-    sfx.warning();
-    tip('rival');
-  }
-  announced = state.warning;
-  if (state.over && !wasOver) {
-    sfx.over();
-    track('game');
-    track('kind', state.kind);
-    $('earned').textContent = `+${fmt(payout())}`;
-    save();
-  }
-  setMusicTension(state.danger > 0 && !state.over);
-  tutorialTick(elapsed);
-  shake = Math.max(0, shake - elapsed);
-  for (const e of effects) e.t += elapsed;
-  effects = effects.filter((e) => e.t < e.life);
-  trackImpacts(elapsed);
-  updateFx(elapsed);
-  renderHud();
-  draw(now / 1000);
   requestAnimationFrame(frame);
 }
 
@@ -678,7 +738,12 @@ canvas.addEventListener('pointerup', (e) => {
 canvas.addEventListener('pointercancel', () => { aiming = false; });
 
 window.addEventListener('keydown', (e) => {
-  if (document.querySelector('dialog[open]')) return;
+  if (screen !== 'game' || document.querySelector('dialog[open]')) return;
+  if (e.key === 'Escape' || e.key === 'p') {
+    e.preventDefault(); // senão o mesmo Esc já fecha a pausa que acabou de abrir
+    pause();
+    return;
+  }
   if (['ArrowLeft', 'ArrowRight', 'ArrowDown', ' '].includes(e.key)) wake();
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     state.aim = clampAim(state.current, state.aim + (e.key === 'ArrowLeft' ? -14 : 14));
@@ -696,16 +761,38 @@ for (const kind of KINDS) {
     btn.addEventListener('click', () => {
       $('chooser').close();
       newGame(kind);
+      show('game');
     });
   }
 }
-$('new').addEventListener('click', () => $('chooser').showModal());
+$('play').addEventListener('click', () => {
+  $('chooser-note').hidden = !hasGame();
+  $('chooser').showModal();
+});
+$('continue').addEventListener('click', () => show('game'));
+$('again').addEventListener('click', () => newGame(state.kind));
+$('to-menu').addEventListener('click', () => show('menu'));
+$('pause').addEventListener('click', pause);
+$('pause-dialog').addEventListener('close', () => { // fecha por botão ou pela tecla Esc
+  paused = false;
+  acc = 0;
+});
+$('resume').addEventListener('click', () => $('pause-dialog').close());
+$('restart').addEventListener('click', () => {
+  $('pause-dialog').close();
+  newGame(state.kind);
+});
+$('quit').addEventListener('click', () => {
+  $('pause-dialog').close();
+  show('menu');
+});
 $('chooser-close').addEventListener('click', () => $('chooser').close());
 $('replay').addEventListener('click', () => {
   $('chooser').close();
   tutorial = newTutorial();
   store.set('miau.tutorialDone', false);
   newGame(state.kind);
+  show('game');
 });
 $('album-btn').addEventListener('click', () => {
   renderAlbum();
@@ -723,33 +810,35 @@ $('shop-btn').addEventListener('click', () => {
   $('shop').showModal();
 });
 $('shop-close').addEventListener('click', () => $('shop').close());
-const soundBtn = $('sound');
+const soundBtns = document.querySelectorAll('.sound-toggle'); // um no menu, outro na pausa
 function renderSound() {
-  soundBtn.textContent = AUDIO_LABELS[audioMode];
+  for (const btn of soundBtns) btn.textContent = AUDIO_LABELS[audioMode];
 }
-soundBtn.addEventListener('click', () => { // alterna: som e música -> só efeitos -> sem som
-  audioMode = AUDIO_MODES[(AUDIO_MODES.indexOf(audioMode) + 1) % AUDIO_MODES.length];
-  store.set('miau.audio', audioMode);
-  unlockAudio();
-  setAudioMode(audioMode);
-  renderSound();
-});
+for (const btn of soundBtns) {
+  btn.addEventListener('click', () => { // alterna: som e música -> só efeitos -> sem som
+    audioMode = AUDIO_MODES[(AUDIO_MODES.indexOf(audioMode) + 1) % AUDIO_MODES.length];
+    store.set('miau.audio', audioMode);
+    unlockAudio();
+    setAudioMode(audioMode);
+    renderSound();
+  });
+}
 renderSound();
+document.addEventListener('pointerdown', unlockAudio, { once: true }); // a música já começa no menu
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     save();
     stopMusic();
+    pause(); // saiu do app no meio da partida: volta em pausa
   } else {
     startMusic();
   }
 });
 
 refreshMissions();
-renderMissionCount();
-renderCoins(false);
 if (state.over) $('earned').textContent = `+${fmt(payout())}`; // partida terminada antes de existirem moedas
 unlock(Math.max(state.current, state.next, ...state.bodies.map((b) => b.level)), false);
 introTip();
 state.aim = clampAim(state.current, state.aim);
-resize();
+show('menu');
 requestAnimationFrame(frame);
