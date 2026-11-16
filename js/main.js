@@ -232,7 +232,8 @@ const TIPS = {
 };
 // Quanto tempo cada dica fica na tela; as sem tempo esperam o jogador agir.
 const TIP_SECONDS = { clock: 6, rival: 12, combo: 5 };
-let tutorial = store.get('miau.tutorial', false) ? null : { step: '', t: 0, seen: new Set() };
+const newTutorial = () => ({ step: '', t: 0, seen: new Set() });
+let tutorial = store.get('miau.tutorialDone', false) ? null : newTutorial();
 
 function tip(step) {
   if (!tutorial || tutorial.seen.has(step)) return; // cada dica aparece uma vez só
@@ -247,7 +248,18 @@ function endTutorial() {
   if (!tutorial) return;
   tutorial = null;
   $('coach').hidden = true;
-  store.set('miau.tutorial', true);
+  store.set('miau.tutorialDone', true);
+}
+
+// Começo (ou recomeço) das duas primeiras dicas, enquanto a primeira junção não aconteceu.
+function introTip() {
+  if (!tutorial || tutorial.seen.has('clock') || state.over) return;
+  tutorial.seen.delete('aim');
+  tutorial.seen.delete('merge');
+  if (state.drops === 0) state.current = 1;
+  state.next = 1;
+  state.aim = clampAim(state.current, state.aim);
+  tip('aim');
 }
 
 // Nas duas primeiras dicas o relógio fica parado e só caem filhotes,
@@ -258,7 +270,7 @@ function tutorialTick(elapsed) {
   if (!tutorial) return;
   tutorial.t += elapsed;
   if (state.over) {
-    endTutorial();
+    $('coach').hidden = true; // as dicas que faltam ficam para a próxima partida
   } else if (tutorial.t > TIP_SECONDS[tutorial.step]) {
     if (tutorial.step === 'combo') endTutorial();
     else $('coach').hidden = true; // segue esperando o próximo acontecimento
@@ -348,6 +360,7 @@ function newGame(kind) {
   effects = [];
   active = false;
   $('over').hidden = true;
+  introTip();
   unlock(Math.max(state.current, state.next), false);
   save();
 }
@@ -404,6 +417,12 @@ for (const kind of KINDS) {
 }
 $('new').addEventListener('click', () => $('chooser').showModal());
 $('chooser-close').addEventListener('click', () => $('chooser').close());
+$('replay').addEventListener('click', () => {
+  $('chooser').close();
+  tutorial = newTutorial();
+  store.set('miau.tutorialDone', false);
+  newGame(state.kind);
+});
 $('album-btn').addEventListener('click', () => {
   renderAlbum();
   $('album').showModal();
@@ -427,11 +446,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 unlock(Math.max(state.current, state.next, ...state.bodies.map((b) => b.level)), false);
-if (tutorial) {
-  if (state.drops === 0) state.current = 1;
-  state.next = 1;
-  tip('aim');
-}
+introTip();
 state.aim = clampAim(state.current, state.aim);
 resize();
 requestAnimationFrame(frame);
