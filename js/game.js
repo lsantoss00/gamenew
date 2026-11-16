@@ -17,7 +17,7 @@ export const FIRST_RIVAL = 6; // quantos bichos soltos até o primeiro intruso
 export const DT = 1 / 240; // passo fixo da física
 
 export const NAMES = {
-  cat: ['Filhotinho', 'Gatinho', 'Malhado', 'Siamês', 'Persa', 'Lince', 'Jaguatirica', 'Onça', 'Tigre', 'Leão'],
+  cat: ['Filhotinho', 'Gatinho', 'Malhado', 'Siamês', 'Persa', 'Lince', 'Jaguatirica', 'Pantera', 'Tigre', 'Leão'],
   dog: ['Filhotinho', 'Caramelo', 'Salsicha', 'Beagle', 'Border Collie', 'Husky', 'Pastor', 'Dobermann', 'São Bernardo', 'Lobo'],
 };
 
@@ -28,6 +28,7 @@ const MAX_STEP = 12; // deslocamento máximo por passo, para a pilha não explod
 const ITERATIONS = 4;
 const PUSH_SPEED = 1.5; // deslocamento por passo que um empurrão pode dar a um bicho parado
 const POP = 2.2; // empurrão que uma junção dá nos vizinhos
+const UPRIGHT = 2.5; // força com que o bicho se endireita
 const GROW = 0.12; // segundos que um bicho recém-juntado leva para crescer
 const SETTLE = 1.2; // idade a partir da qual o bicho conta para a linha
 const DANGER_LIMIT = 1.6; // segundos acima da linha até o fim de jogo
@@ -113,7 +114,7 @@ export function drop(state, x = state.aim, rng = Math.random) {
  * Avança só a física em `dt` segundos. Devolve o que aconteceu, para a tela animar:
  *  - { type: 'merge', x, y, level, gained, combo }
  *  - { type: 'adopt', x, y, level, gained }
- *  - { type: 'scare', x, y, gained }: intruso espantado por uma junção ao lado
+ *  - { type: 'scare', x, y, level, gained }: intruso espantado por uma junção ao lado
  */
 export function step(state, dt = DT) {
   const events = [];
@@ -138,7 +139,9 @@ export function step(state, dt = DT) {
     b.py = b.y;
     b.x += vx;
     b.y += vy + GRAVITY * dt * dt;
+    // rola com o movimento e, como um joão-bobo, volta a ficar de pé quando para
     b.angle += vx / b.r;
+    b.angle -= b.angle * Math.min(1, UPRIGHT * dt);
     limits.set(b, Math.max(PUSH_SPEED, Math.hypot(b.x - b.px, b.y - b.py)));
   }
 
@@ -226,7 +229,7 @@ export function step(state, dt = DT) {
       if (b.rival) {
         dead.add(b);
         state.score += SCARE_BONUS;
-        events.push({ type: 'scare', x: b.x, y: b.y, gained: SCARE_BONUS });
+        events.push({ type: 'scare', x: b.x, y: b.y, level: b.level, gained: SCARE_BONUS });
       } else if (d > 1 && b.level !== pop.level) { // quem vai juntar em seguida não é afastado
         const k = POP * Math.min(1, (pop.r * pop.r) / (b.r * b.r));
         b.px -= (dx / d) * k;

@@ -21,6 +21,8 @@ npm test    # testa as regras e a física
 Não há dependências nem etapa de build: é HTML, CSS e JavaScript puros.
 
 - `js/game.js`: regras e física (sem tela, testadas em `test/`)
-- `js/art.js`: desenho dos bichos em SVG
+- `js/art.js`: desenho dos bichos em SVG, com expressões
+- `js/scene.js`: cenário do quintal (dia e noite)
+- `js/fx.js`: partículas e efeitos visuais
 - `js/main.js`: tela (canvas), toque, teclado e salvamento
 - `js/sound.js`: efeitos sonoros sintetizados

@@ -2,6 +2,7 @@
 
 let ctx = null;
 let enabled = true;
+let lastThud = 0;
 
 export function setSound(on) {
   enabled = on;
@@ -32,6 +33,13 @@ function tone(from, to, duration, type = 'sine', volume = 0.12, delay = 0) {
 
 export const sfx = {
   drop: () => tone(260, 150, 0.09, 'triangle', 0.1),
+  // baque ao cair: mais grave para bicho grande, no máximo um a cada 60 ms
+  thud: (strength, level) => {
+    const now = performance.now();
+    if (now - lastThud < 60) return;
+    lastThud = now;
+    tone(150 - level * 7, 50, 0.1, 'sine', 0.05 + 0.09 * strength);
+  },
   // quanto maior o bicho e o combo, mais agudo
   merge: (level, combo) => {
     const f = 300 * 2 ** ((level + combo - 2) / 7);

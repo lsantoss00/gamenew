@@ -2,7 +2,9 @@ import {
   createGame, drop, step, tick, canDrop, clampAim, dropTime,
   W, H, LINE_Y, DROP_Y, DT, RADII, MAX_LEVEL, KINDS, NAMES,
 } from './game.js';
-import { animalSVG, tileColor } from './art.js';
+import { animalSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
+import { paintScene, drawClouds } from './scene.js';
+import { burst, dust, poof, confetti, fling, updateFx, drawFx, clearFx } from './fx.js';
 import { sfx, setSound, unlockAudio } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
@@ -49,12 +51,14 @@ const save = () => store.set('miau.drop', state);
 
 const canvas = $('canvas');
 const ctx = canvas.getContext('2d');
-const sprites = {}; // 'cat3' -> imagem pronta para o canvas
+const sprites = {}; // 'cat3:happy' -> imagem pronta para o canvas
+const SPRITE_SCALE = ART_BOX / HEAD_R; // o desenho é 3x o raio da cabeça
+const rivalKind = () => (state.kind === 'cat' ? 'dog' : 'cat');
 
-function sprite(kind, level) {
-  const key = kind + level;
+function sprite(kind, level, mood = 'normal') {
+  const key = `${kind}${level}:${mood}`;
   if (!sprites[key]) {
-    const svg = animalSVG(kind, level).replace('<svg ', '<svg width="200" height="200" ');
+    const svg = animalSVG(kind, level, mood).replace('<svg ', '<svg width="300" height="300" ');
     const img = new Image();
     img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     sprites[key] = img;
@@ -62,22 +66,48 @@ function sprite(kind, level) {
   return sprites[key];
 }
 
-function drawAnimal(level, x, y, r, angle, alpha = 1, rival = false) {
-  const kind = rival ? (state.kind === 'cat' ? 'dog' : 'cat') : state.kind;
+// Desenha um bicho com a cabeça de raio `r` centrada em (x, y).
+// sx/sy amassam o bicho na tela (não giram junto com ele).
+function drawAnimal(kind, level, mood, x, y, r, angle = 0, sx = 1, sy = 1, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.translate(x, y);
+  ctx.translate(x, y + r * (1 - sy)); // amassa com a base apoiada no chão
+  ctx.scale(sx, sy);
   ctx.rotate(angle);
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.fillStyle = rival ? '#3a3f4a' : tileColor(kind, level);
-  ctx.fill();
-  ctx.lineWidth = rival ? 3 : 1.5;
-  ctx.strokeStyle = rival ? '#e5484d' : 'rgb(0 0 0 / 0.18)';
-  ctx.stroke();
-  const img = sprite(kind, level);
-  if (img.complete && img.naturalWidth) ctx.drawImage(img, -r * 0.9, -r * 0.9, r * 1.8, r * 1.8);
+  const img = sprite(kind, level, mood);
+  const size = r * SPRITE_SCALE;
+  if (img.complete && img.naturalWidth) {
+    ctx.drawImage(img, -size / 2, -size * 0.52, size, size);
+  } else { // enquanto o desenho carrega
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = furColor(kind, level);
+    ctx.fill();
+  }
   ctx.restore();
+}
+
+const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
+function isDark() {
+  const forced = document.documentElement.dataset.theme;
+  return forced ? forced === 'dark' : darkMq.matches;
+}
+
+// O cenário é pintado uma vez e reaproveitado até a tela ou o tema mudarem.
+let backdrop = null;
+let backdropKey = '';
+function scene() {
+  const key = `${canvas.width}x${canvas.height}:${isDark()}`;
+  if (key !== backdropKey && canvas.width && canvas.height) {
+    backdrop = document.createElement('canvas');
+    backdrop.width = canvas.width;
+    backdrop.height = canvas.height;
+    const c = backdrop.getContext('2d');
+    c.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+    paintScene(c, W, H, isDark());
+    backdropKey = key;
+  }
+  return backdrop;
 }
 
 function resize() {
@@ -88,18 +118,91 @@ function resize() {
 }
 new ResizeObserver(resize).observe(canvas);
 
-function draw() {
+// Estado só de aparência de cada bicho (não é salvo): velocidade anterior e último impacto.
+const looks = new Map();
+
+function trackImpacts(elapsed) {
+  if (looks.size > state.bodies.length + 60) {
+    const alive = new Set(state.bodies.map((b) => b.id));
+    for (const id of looks.keys()) if (!alive.has(id)) looks.delete(id);
+  }
+  for (const b of state.bodies) {
+    const vy = (b.y - b.py) / DT;
+    let look = looks.get(b.id);
+    if (!look) looks.set(b.id, look = { vy: 0, hit: 9, amp: 0 });
+    if (look.vy > 380 && vy < look.vy * 0.45) { // vinha caindo e parou: impacto
+      look.hit = 0;
+      look.amp = Math.min(1, (look.vy - vy) / 1300);
+      if (!calm.matches) dust(b.x, b.y + b.r, b.r * 0.8, look.amp);
+      if (look.amp > 0.3) sfx.thud(look.amp, b.level);
+    }
+    look.vy = vy;
+    look.hit += elapsed;
+  }
+}
+
+function moodOf(b, seconds) {
+  if (b.rival) return 'angry';
+  if (state.over) return 'scared';
+  if (b.r0 < RADII[b.level - 1] && b.age < 0.8) return 'happy'; // acabou de nascer de uma junção
+  if (state.danger > 0 && b.y - b.r < LINE_Y + 30) return 'scared';
+  if ((seconds + b.id * 1.37) % 4.1 < 0.13) return 'blink';
+  return 'normal';
+}
+
+function drawBody(b, seconds) {
+  let sx = 1;
+  let sy = 1;
+  if (!calm.matches) {
+    const look = looks.get(b.id);
+    if (look && look.hit < 0.6) { // amassa e volta, como gelatina
+      const s = look.amp * 0.26 * Math.exp(-9 * look.hit) * Math.cos(26 * look.hit);
+      sx += s;
+      sy -= s;
+    }
+    if (b.r0 < RADII[b.level - 1] && b.age < 0.6) { // estufa ao nascer de uma junção
+      const pop = 0.2 * Math.exp(-8 * b.age) * Math.cos(22 * b.age);
+      sx += pop;
+      sy += pop;
+    }
+  }
+  if (b.rival) { // aura vermelha pulsando em volta do intruso
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r + 3 + Math.sin(seconds * 8) * 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgb(229 72 77 / 0.35)';
+    ctx.fill();
+  }
+  drawAnimal(b.rival ? rivalKind() : state.kind, b.level, moodOf(b, seconds), b.x, b.y, b.r, b.angle, sx, sy);
+}
+
+function draw(seconds) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const back = scene();
+  if (back) ctx.drawImage(back, 0, 0);
   ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
-  ctx.clearRect(0, 0, W, H);
+  drawClouds(ctx, W, calm.matches ? 0 : seconds, isDark());
   if (shake > 0 && !calm.matches) {
     const amp = 28 * shake;
     ctx.translate((Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp);
   }
 
   const danger = state.danger > 0 || state.over;
+  if (danger) { // clarão vermelho no alto quando a pilha passa da linha
+    const pulse = 0.25 + 0.15 * Math.sin(seconds * 10);
+    const red = ctx.createLinearGradient(0, 0, 0, LINE_Y + 50);
+    red.addColorStop(0, `rgb(230 40 40 / ${pulse})`);
+    red.addColorStop(1, 'rgb(230 40 40 / 0)');
+    ctx.fillStyle = red;
+    ctx.fillRect(0, 0, W, LINE_Y + 50);
+  }
   ctx.setLineDash([8, 8]);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = danger ? 'rgb(230 40 40 / 0.9)' : 'rgb(255 255 255 / 0.55)';
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = 'rgb(0 0 0 / 0.18)';
+  ctx.beginPath();
+  ctx.moveTo(0, LINE_Y + 1.5);
+  ctx.lineTo(W, LINE_Y + 1.5);
+  ctx.stroke();
+  ctx.strokeStyle = danger ? 'rgb(240 50 50 / 0.95)' : 'rgb(255 255 255 / 0.85)';
   ctx.beginPath();
   ctx.moveTo(0, LINE_Y);
   ctx.lineTo(W, LINE_Y);
@@ -107,51 +210,68 @@ function draw() {
 
   const ready = canDrop(state);
   if (ready) {
-    ctx.strokeStyle = 'rgb(255 255 255 / 0.4)';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgb(255 255 255 / 0.5)';
+    ctx.lineDashOffset = calm.matches ? 0 : -seconds * 30;
     ctx.beginPath();
     ctx.moveTo(state.aim, DROP_Y);
     ctx.lineTo(state.aim, H);
     ctx.stroke();
+    ctx.lineDashOffset = 0;
   }
   ctx.setLineDash([]);
 
-  for (const b of state.bodies) drawAnimal(b.level, b.x, b.y, b.r, b.angle, 1, b.rival);
+  for (const b of state.bodies) drawBody(b, seconds);
 
-  if (!state.over) {
+  if (state.warning) { // o intruso espia por cima e uma seta mostra onde ele vai cair
+    const { x, t, level } = state.warning;
+    const r = RADII[level - 1];
+    const peek = Math.min(1, (1.2 - t) / 0.3);
+    drawAnimal(rivalKind(), level, 'angry', x, -r * 0.9 + r * 0.75 * peek, r, Math.sin(seconds * 14) * 0.08);
+    const bob = Math.sin(seconds * 12) * 3;
+    ctx.fillStyle = '#e5484d';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x - 12, r + 14 + bob);
+    ctx.lineTo(x + 12, r + 14 + bob);
+    ctx.lineTo(x, r + 34 + bob);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  if (!state.over) { // o bicho da vez balança de leve enquanto espera
     const r = RADII[state.current - 1];
-    drawAnimal(state.current, state.aim, DROP_Y, r, 0, ready ? 1 : 0.35);
-    if (ready && active && !learningBasics()) { // relógio: o anel vai sumindo até o bicho cair sozinho
+    const urgent = ready && clockOn() && state.timer < 1;
+    const sway = calm.matches ? 0 : Math.sin(seconds * 3) * 0.08 + (urgent ? Math.sin(seconds * 40) * 0.06 : 0);
+    const y = DROP_Y + (calm.matches ? 0 : Math.sin(seconds * 2.2) * 2.5);
+    const mood = urgent ? 'scared' : (seconds % 3.3 < 0.13 ? 'blink' : 'normal');
+    drawAnimal(state.kind, state.current, mood, state.aim, y, r, sway, 1, 1, ready ? 1 : 0.35);
+    if (ready && clockOn()) { // relógio: o anel vai sumindo até o bicho cair sozinho
       ctx.beginPath();
-      ctx.arc(state.aim, DROP_Y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (state.timer / dropTime(state)));
-      ctx.lineWidth = 4;
+      ctx.arc(state.aim, y, r + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (state.timer / dropTime(state)));
+      ctx.lineWidth = 4.5;
       ctx.lineCap = 'round';
-      ctx.strokeStyle = state.timer < 1 ? '#e5484d' : 'rgb(255 255 255 / 0.9)';
+      ctx.strokeStyle = urgent ? '#e5484d' : 'rgb(255 255 255 / 0.95)';
       ctx.stroke();
+      ctx.lineCap = 'butt';
     }
   }
 
-  if (state.warning) { // seta piscando onde o intruso vai cair
-    const { x, t } = state.warning;
-    ctx.globalAlpha = 0.55 + 0.45 * Math.sin(t * 22);
-    ctx.fillStyle = '#e5484d';
-    ctx.beginPath();
-    ctx.moveTo(x - 14, 6);
-    ctx.lineTo(x + 14, 6);
-    ctx.lineTo(x, 30);
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
+  drawFx(ctx);
 
   for (const e of effects) {
     const k = e.t / e.life;
     if (e.text) {
-      ctx.font = `800 ${e.size}px "Baloo 2", "Trebuchet MS", sans-serif`;
+      const bounce = calm.matches ? 1 : 1 + 0.7 * Math.exp(-14 * e.t); // entra grande e assenta
+      ctx.font = `800 ${e.size * bounce}px "Baloo 2", "Trebuchet MS", sans-serif`;
       ctx.textAlign = 'center';
       ctx.globalAlpha = 1 - k * k;
       ctx.lineWidth = 4;
       ctx.lineJoin = 'round';
-      ctx.strokeStyle = 'rgb(0 0 0 / 0.55)';
+      ctx.strokeStyle = 'rgb(0 0 0 / 0.6)';
       ctx.fillStyle = e.color;
       const x = Math.min(W - 50, Math.max(50, e.x));
       const y = Math.max(24, e.y - 34 * k);
@@ -160,8 +280,8 @@ function draw() {
       ctx.globalAlpha = 1;
     } else {
       ctx.beginPath();
-      ctx.arc(e.x, e.y, e.r * (1 + k * 0.5), 0, Math.PI * 2);
-      ctx.lineWidth = 5 * (1 - k);
+      ctx.arc(e.x, e.y, e.r * (1 + k * 0.6), 0, Math.PI * 2);
+      ctx.lineWidth = 6 * (1 - k);
       ctx.strokeStyle = `rgb(255 255 255 / ${0.9 * (1 - k)})`;
       ctx.stroke();
     }
@@ -174,18 +294,36 @@ function face(kind, level) {
   return `<div class="face" style="background:${tileColor(kind, level)}">${animalSVG(kind, level)}</div>`;
 }
 
+function bump(el) { // reinicia a animação de "pulo" do elemento
+  el.classList.remove('bump');
+  void el.offsetWidth;
+  el.classList.add('bump');
+}
+
 let shownNext = '';
+let shownScore = -1;
+let shownBest = -1;
 function renderHud() {
   if (state.score > best) {
     best = state.score;
     store.set('miau.drop.best', best);
   }
-  $('score').textContent = fmt(state.score);
-  $('best').textContent = fmt(best);
+  if (shownScore !== state.score) { // o placar sobe contando, em vez de pular direto
+    const jump = shownScore < 0 || state.score < shownScore || calm.matches;
+    const before = shownScore;
+    shownScore = jump ? state.score : shownScore + Math.ceil((state.score - shownScore) * 0.18);
+    $('score').textContent = fmt(shownScore);
+    if (before >= 0 && shownScore === state.score) bump($('score').parentElement);
+  }
+  if (shownBest !== best) {
+    shownBest = best;
+    $('best').textContent = fmt(best);
+  }
   const key = state.kind + state.next;
   if (key !== shownNext) {
     shownNext = key;
     $('next').innerHTML = face(state.kind, state.next);
+    bump($('next'));
   }
   if (state.over && $('over').hidden) {
     $('final').textContent = fmt(state.score);
@@ -279,6 +417,7 @@ function tutorialTick(elapsed) {
 
 // --- Laço do jogo ---
 
+const clockOn = () => active && !learningBasics();
 const ring = (x, y, r) => effects.push({ x, y, r, t: 0, life: 0.3 });
 const floatText = (x, y, text, size = 18, color = '#fff') => effects.push({ x, y, text, size, color, t: 0, life: 0.9 });
 
@@ -288,6 +427,10 @@ function handle(events) {
   for (const e of events) {
     if (e.type === 'merge') {
       ring(e.x, e.y, RADII[e.level - 1]);
+      burst(e.x, e.y, {
+        n: 8 + e.level * 2, speed: 150 + e.level * 28, size: 5 + e.level * 0.6,
+        colors: [furColor(state.kind, e.level), '#fff', '#ffd43b'],
+      });
       floatText(e.x, e.y, `+${fmt(e.gained)}`);
       if (e.combo > 1) floatText(e.x, e.y - 22, `Combo x${e.combo}`, 22, '#ffd43b');
       if (e.level >= 6) shake = 0.25;
@@ -298,10 +441,14 @@ function handle(events) {
       ring(e.x, e.y, RADII[MAX_LEVEL - 1]);
       floatText(e.x, e.y, `+${fmt(e.gained)}`, 26, '#ffd43b');
       toast(`${NAMES[state.kind][MAX_LEVEL - 1]} adotado!`);
+      burst(e.x, e.y, { n: 16, speed: 260, size: 9, shape: 'heart', colors: ['#ff6b81', '#ff8fa3', '#fff'], life: 1.1, g: 200 });
+      if (!calm.matches) confetti(W);
       shake = 0.4;
       sfx.adopt();
     } else if (e.type === 'scare') {
       floatText(e.x, e.y, `Xô! +${e.gained}`, 18, '#ffb3b3');
+      poof(e.x, e.y, RADII[e.level - 1]);
+      fling(sprite(rivalKind(), e.level, 'scared'), e.x, e.y, RADII[e.level - 1], RADII[e.level - 1] * SPRITE_SCALE);
       sfx.scare();
       tip('combo');
     } else if (e.type === 'rival') {
@@ -325,7 +472,7 @@ function frame(now) {
   acc += elapsed;
   const wasOver = state.over;
   while (acc >= DT) {
-    handle(active && !learningBasics() ? tick(state, DT) : step(state, DT));
+    handle(clockOn() ? tick(state, DT) : step(state, DT));
     acc -= DT;
   }
   if (state.warning && state.warning !== announced) { // aviso novo, venha de onde vier
@@ -341,8 +488,10 @@ function frame(now) {
   shake = Math.max(0, shake - elapsed);
   for (const e of effects) e.t += elapsed;
   effects = effects.filter((e) => e.t < e.life);
+  trackImpacts(elapsed);
+  updateFx(elapsed);
   renderHud();
-  draw();
+  draw(now / 1000);
   requestAnimationFrame(frame);
 }
 
@@ -358,6 +507,8 @@ function release() {
 function newGame(kind) {
   state = createGame(kind);
   effects = [];
+  clearFx();
+  looks.clear();
   active = false;
   $('over').hidden = true;
   introTip();
