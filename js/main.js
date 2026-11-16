@@ -120,7 +120,7 @@ function draw() {
   if (!state.over) {
     const r = RADII[state.current - 1];
     drawAnimal(state.current, state.aim, DROP_Y, r, 0, ready ? 1 : 0.35);
-    if (ready && active) { // relógio: o anel vai sumindo até o bicho cair sozinho
+    if (ready && active && !learningBasics()) { // relógio: o anel vai sumindo até o bicho cair sozinho
       ctx.beginPath();
       ctx.arc(state.aim, DROP_Y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (state.timer / dropTime(state)));
       ctx.lineWidth = 4;
@@ -220,6 +220,51 @@ function renderAlbum() {
   }
 }
 
+// --- Tutorial da primeira partida ---
+// Dicas curtas que aparecem no quintal conforme as coisas acontecem, sem travar o jogo.
+
+const TIPS = {
+  aim: 'Arraste o dedo para mirar e solte para o bicho cair.',
+  merge: 'Agora solte outro igual encostado nele: os dois viram um bicho maior.',
+  clock: 'O anel em volta do bicho é o relógio. Se o tempo acabar, ele cai sozinho.',
+  rival: 'Vem aí um intruso! Ele não junta com nada. Para espantá-lo, junte dois bichos encostados nele.',
+  combo: 'Boa! Juntar várias vezes seguidas dá combo e multiplica os pontos.',
+};
+// Quanto tempo cada dica fica na tela; as sem tempo esperam o jogador agir.
+const TIP_SECONDS = { clock: 6, rival: 12, combo: 5 };
+let tutorial = store.get('miau.tutorial', false) ? null : { step: '', t: 0, seen: new Set() };
+
+function tip(step) {
+  if (!tutorial || tutorial.seen.has(step)) return; // cada dica aparece uma vez só
+  tutorial.seen.add(step);
+  tutorial.step = step;
+  tutorial.t = 0;
+  $('coach').textContent = TIPS[step];
+  $('coach').hidden = false;
+}
+
+function endTutorial() {
+  if (!tutorial) return;
+  tutorial = null;
+  $('coach').hidden = true;
+  store.set('miau.tutorial', true);
+}
+
+// Nas duas primeiras dicas o relógio fica parado e só caem filhotes,
+// para a primeira junção ser garantida.
+const learningBasics = () => tutorial && (tutorial.step === 'aim' || tutorial.step === 'merge');
+
+function tutorialTick(elapsed) {
+  if (!tutorial) return;
+  tutorial.t += elapsed;
+  if (state.over) {
+    endTutorial();
+  } else if (tutorial.t > TIP_SECONDS[tutorial.step]) {
+    if (tutorial.step === 'combo') endTutorial();
+    else $('coach').hidden = true; // segue esperando o próximo acontecimento
+  }
+}
+
 // --- Laço do jogo ---
 
 const ring = (x, y, r) => effects.push({ x, y, r, t: 0, life: 0.3 });
@@ -236,6 +281,7 @@ function handle(events) {
       if (e.level >= 6) shake = 0.25;
       sfx.merge(e.level, e.combo);
       unlock(e.level, true);
+      if (tutorial?.step === 'merge') tip('clock');
     } else if (e.type === 'adopt') {
       ring(e.x, e.y, RADII[MAX_LEVEL - 1]);
       floatText(e.x, e.y, `+${fmt(e.gained)}`, 26, '#ffd43b');
@@ -245,6 +291,7 @@ function handle(events) {
     } else if (e.type === 'scare') {
       floatText(e.x, e.y, `Xô! +${e.gained}`, 18, '#ffb3b3');
       sfx.scare();
+      tip('combo');
     } else if (e.type === 'rival') {
       sfx.rival();
     } else if (e.type === 'autodrop') {
@@ -259,21 +306,26 @@ function handle(events) {
 
 let last = performance.now();
 let acc = 0;
+let announced = null; // último aviso de intruso já anunciado
 function frame(now) {
   const elapsed = Math.min(0.05, (now - last) / 1000);
   last = now;
   acc += elapsed;
   const wasOver = state.over;
-  const hadWarning = !!state.warning;
   while (acc >= DT) {
-    handle(active ? tick(state, DT) : step(state, DT));
+    handle(active && !learningBasics() ? tick(state, DT) : step(state, DT));
     acc -= DT;
   }
-  if (state.warning && !hadWarning) sfx.warning();
+  if (state.warning && state.warning !== announced) { // aviso novo, venha de onde vier
+    sfx.warning();
+    tip('rival');
+  }
+  announced = state.warning;
   if (state.over && !wasOver) {
     sfx.over();
     save();
   }
+  tutorialTick(elapsed);
   shake = Math.max(0, shake - elapsed);
   for (const e of effects) e.t += elapsed;
   effects = effects.filter((e) => e.t < e.life);
@@ -285,6 +337,8 @@ function frame(now) {
 function release() {
   if (!drop(state, state.aim)) return;
   sfx.drop();
+  if (tutorial?.step === 'aim') tip('merge');
+  if (learningBasics()) state.next = 1;
   unlock(state.current, false);
   save();
 }
@@ -373,6 +427,11 @@ document.addEventListener('visibilitychange', () => {
 });
 
 unlock(Math.max(state.current, state.next, ...state.bodies.map((b) => b.level)), false);
+if (tutorial) {
+  if (state.drops === 0) state.current = 1;
+  state.next = 1;
+  tip('aim');
+}
 state.aim = clampAim(state.current, state.aim);
 resize();
 requestAnimationFrame(frame);
