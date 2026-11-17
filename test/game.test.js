@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, createSeededGame, stateRng, drop, step, tick, canDrop, dropTime, shake, bodyAt, removeBody, scareAll, W, H, LINE_Y, RADII, MAX_LEVEL, ADOPTION_BONUS, SCARE_BONUS,
+  MODES, createGame, createSeededGame, stateRng, drop, step, tick, canDrop, dropTime, shake, bodyAt, removeBody, scareAll, W, H, LINE_Y, RADII, MAX_LEVEL, ADOPTION_BONUS, SCARE_BONUS,
   FIRST_RIVAL, WARNING_TIME, DT,
 } from '../js/game.js';
 
@@ -343,4 +343,31 @@ test('tremor sacode a pilha sem contar para a linha', () => {
   assert.equal(s.over, false, 'durante o tremor a pilha não deveria contar');
   for (let i = 0; i < 4 / DT; i++) tick(s, DT, () => 0.5);
   assert.equal(s.over, true, 'depois do tremor a pilha alta volta a contar');
+});
+
+test('modo zen: sem relógio, sem intrusos e sem eventos', () => {
+  const s = createGame('cat', Math.random, MODES.zen);
+  s.aim = 100;
+  for (let i = 0; i < 10 / DT; i++) tick(s);
+  assert.equal(s.bodies.length, 0, 'o relógio não deveria soltar bichos');
+  for (let i = 0; i < 40; i++) {
+    s.cooldown = 0;
+    drop(s, 20 + (i % 9) * 40);
+    for (let k = 0; k < 0.3 / DT; k++) tick(s);
+  }
+  assert.equal(s.warning, null);
+  assert.ok(!s.bodies.some((b) => b.rival));
+  assert.equal(s.weather, null);
+});
+
+test('contra o tempo: a partida acaba quando o tempo zera', () => {
+  const s = createGame('dog', Math.random, MODES.time);
+  assert.equal(s.timeLeft, 90);
+  const events = [];
+  for (let i = 0; i < 89 / DT; i++) events.push(...tick(s));
+  assert.equal(s.over, false);
+  for (let i = 0; i < 1.1 / DT; i++) events.push(...tick(s));
+  assert.deepEqual([s.over, s.overReason, s.timeLeft], [true, 'time', 0]);
+  assert.equal(events.filter((e) => e.type === 'timeup').length, 1);
+  assert.equal(s.bodies.length, 0, 'sem relógio de soltar: só cai o que o jogador soltar');
 });

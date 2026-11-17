@@ -1,5 +1,5 @@
 import {
-  SPECIAL_NAMES, SLEEP_TIME, upgradeState,
+  MODES, SPECIAL_NAMES, SLEEP_TIME, upgradeState,
   createGame, createSeededGame, stateRng, drop, step, tick, canDrop, clampAim, dropTime, shake as shakeYard, bodyAt, removeBody, scareAll,
   W, H, LINE_Y, DROP_Y, DT, RADII, MAX_LEVEL, KINDS, NAMES,
 } from './game.js';
@@ -60,6 +60,27 @@ setAudioMode(audioMode);
 const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const save = () => store.set('miau.drop', state);
+
+const MODE_NAMES = { classic: 'Clássico', zen: 'Zen', time: 'Contra o tempo', daily: 'Desafio do dia' };
+// Recorde de cada modo (o do clássico é o recorde que já existia).
+function bestOf(mode) {
+  if (mode === 'classic') return best;
+  if (mode === 'daily') return meta.challenge?.date === state.daily ? meta.challenge.best : 0;
+  return meta.bests?.[mode] ?? 0;
+}
+function setBest(mode, score) {
+  if (mode === 'classic') {
+    best = score;
+    store.set('miau.drop.best', best);
+  } else if (mode !== 'daily') {
+    meta.bests = { ...meta.bests, [mode]: score };
+    store.set('miau.meta', meta);
+  }
+}
+function clockText(seconds) {
+  const t = Math.ceil(seconds);
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+}
 // No desafio do dia o sorteio vem da semente guardada na partida; fora dele, é livre.
 const rngOf = () => (state.daily ? stateRng(state) : Math.random);
 
@@ -405,14 +426,14 @@ function draw(seconds) {
 
   if (!state.over) { // o bicho da vez balança de leve enquanto espera
     const r = RADII[state.current - 1];
-    const urgent = ready && clockOn() && state.timer < 1;
+    const urgent = ready && clockOn() && state.rules.clock && state.timer < 1;
     const sway = calm.matches ? 0 : Math.sin(seconds * 3) * 0.08 + (urgent ? Math.sin(seconds * 40) * 0.06 : 0);
     const y = DROP_Y + (calm.matches ? 0 : Math.sin(seconds * 2.2) * 2.5);
     const mood = urgent ? 'scared' : (seconds % 3.3 < 0.13 ? 'blink' : 'normal');
     const special = state.currentSpecial;
     drawAnimal(special === 'wild' ? 'wild' : state.kind, state.current, special === 'sleepy' ? 'blink' : mood, state.aim, y, r, sway, 1, 1, ready ? 1 : 0.35);
     if (special && ready) decorate(special, state.aim, y, r, seconds, special === 'sleepy' ? SLEEP_TIME : 0);
-    if (ready && clockOn()) { // relógio: o anel vai sumindo até o bicho cair sozinho
+    if (ready && clockOn() && state.rules.clock) { // relógio: o anel vai sumindo até o bicho cair sozinho
       ctx.beginPath();
       ctx.arc(state.aim, y, r + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (state.timer / dropTime(state)));
       ctx.lineWidth = 4.5;
@@ -469,10 +490,7 @@ let shownNext = '';
 let shownScore = -1;
 let shownBest = -1;
 function renderHud() {
-  if (state.score > best) {
-    best = state.score;
-    store.set('miau.drop.best', best);
-  }
+  if (state.score > bestOf(state.mode)) setBest(state.mode, state.score);
   if (shownScore !== state.score) { // o placar sobe contando, em vez de pular direto
     const jump = shownScore < 0 || state.score < shownScore || calm.matches;
     const before = shownScore;
@@ -480,9 +498,14 @@ function renderHud() {
     $('score').textContent = fmt(shownScore);
     if (before >= 0 && shownScore === state.score) bump($('score').parentElement);
   }
-  if (shownBest !== best) {
-    shownBest = best;
-    $('best').textContent = fmt(best);
+  // segunda caixa do placar: o tempo que falta, ou o recorde do modo
+  const timed = state.rules.timeLimit > 0;
+  const boxValue = timed ? clockText(state.timeLeft) : fmt(bestOf(state.mode));
+  if (shownBest !== boxValue) {
+    shownBest = boxValue;
+    $('best-label').textContent = timed ? 'Tempo' : 'Recorde';
+    $('best').textContent = boxValue;
+    $('best-box').classList.toggle('low', timed && state.timeLeft <= 10);
   }
   const key = state.kind + state.next + state.nextSpecial;
   if (key !== shownNext) {
@@ -493,6 +516,7 @@ function renderHud() {
     bump($('next'));
   }
   if (state.over && $('over').hidden) {
+    $('over-title').textContent = state.overReason === 'time' ? 'Tempo esgotado!' : 'Lotou!';
     $('final').textContent = fmt(state.score);
     $('over').hidden = false;
   }
@@ -537,7 +561,7 @@ function renderMenu() {
   const going = hasGame();
   $('continue').hidden = !going;
   $('continue-info').textContent = going
-    ? `${state.daily ? 'Desafio do dia · ' : ''}${state.kind === 'cat' ? 'Gatos' : 'Cachorros'} · ${fmt(state.score)} pontos` : '';
+    ? `${MODE_NAMES[state.mode]} · ${state.kind === 'cat' ? 'Gatos' : 'Cachorros'} · ${fmt(state.score)} pontos` : '';
   const days = meta.streak?.last === today() ? meta.streak.days : 0;
   $('menu-streak').textContent = days > 1 ? ` · ${days} dias seguidos` : '';
   $('play').textContent = going ? 'Nova partida' : 'Jogar';
@@ -774,7 +798,7 @@ function offerDailyBonus() {
 function payout() {
   if (!state.paid) {
     state.paid = true;
-    state.earned = coinsForScore(state.score);
+    state.earned = Math.floor(coinsForScore(state.score) / (state.mode === 'zen' ? 2 : 1));
     earn(state.earned);
     save();
   }
@@ -851,6 +875,7 @@ const newTutorial = () => ({ step: '', t: 0, seen: new Set() });
 let tutorial = store.get('miau.tutorialDone', false) ? null : newTutorial();
 
 function tip(step) {
+  if (state.mode !== 'classic') return; // as dicas falam do relógio e dos intrusos
   if (!tutorial || tutorial.seen.has(step)) return; // cada dica aparece uma vez só
   tutorial.seen.add(step);
   tutorial.step = step;
@@ -868,7 +893,7 @@ function endTutorial() {
 
 // Começo (ou recomeço) das duas primeiras dicas, enquanto a primeira junção não aconteceu.
 function introTip() {
-  if (!tutorial || tutorial.seen.has('clock') || state.over) return;
+  if (!tutorial || tutorial.seen.has('clock') || state.over || state.mode !== 'classic') return;
   tutorial.seen.delete('aim');
   tutorial.seen.delete('merge');
   if (state.drops === 0) state.current = 1;
@@ -879,7 +904,7 @@ function introTip() {
 
 // Nas duas primeiras dicas o relógio fica parado e só caem filhotes,
 // para a primeira junção ser garantida.
-const learningBasics = () => tutorial && (tutorial.step === 'aim' || tutorial.step === 'merge');
+const learningBasics = () => tutorial && state.mode === 'classic' && (tutorial.step === 'aim' || tutorial.step === 'merge');
 
 function tutorialTick(elapsed) {
   if (!tutorial) return;
@@ -1018,20 +1043,21 @@ function release() {
   save();
 }
 
-function newGame(kind, daily = false) {
+function newGame(kind, mode = 'classic') {
   if (!state.over && state.score > 0) { // partida abandonada também rende moedas
     const paid = state.paid;
     const coins = payout();
     if (coins && !paid) toast(`+${fmt(coins)} moedas pela partida`);
   }
   refreshMissions();
-  if (daily) { // desafio do dia: espécie e sorteio definidos pela data
+  if (mode === 'daily') { // desafio do dia: espécie e sorteio definidos pela data
     const date = today();
     state = createSeededGame(challengeKind(date), dateSeed(date));
     state.daily = date;
   } else {
-    state = createGame(kind);
+    state = createGame(kind, Math.random, MODES[mode]);
   }
+  state.mode = mode;
   picking = false;
   effects = [];
   clearFx();
@@ -1097,18 +1123,36 @@ window.addEventListener('keydown', (e) => {
   e.preventDefault();
 });
 
-for (const kind of KINDS) {
-  for (const btn of document.querySelectorAll(`[data-kind="${kind}"]`)) {
-    btn.insertAdjacentHTML('afterbegin', face(kind, 1));
-    btn.addEventListener('click', () => {
-      $('chooser').close();
-      newGame(kind);
-      show('game');
-    });
+// Escolha de partida: espécie (lembrada) e modo.
+const chosenKind = () => meta.kind ?? 'cat';
+function renderChooser() {
+  for (const btn of document.querySelectorAll('[data-species]')) {
+    btn.setAttribute('aria-pressed', String(btn.dataset.species === chosenKind()));
+  }
+  for (const el of document.querySelectorAll('[data-best]')) {
+    const value = bestOf(el.dataset.best);
+    el.textContent = value ? `Recorde: ${fmt(value)} pontos` : '';
   }
 }
+for (const btn of document.querySelectorAll('[data-species]')) {
+  btn.insertAdjacentHTML('afterbegin', face(btn.dataset.species, 1));
+  btn.addEventListener('click', () => {
+    meta.kind = btn.dataset.species;
+    store.set('miau.meta', meta);
+    renderChooser();
+  });
+}
+for (const btn of document.querySelectorAll('[data-mode]')) {
+  btn.addEventListener('click', () => {
+    $('chooser').close();
+    newGame(chosenKind(), btn.dataset.mode);
+    show('game');
+  });
+}
+const sameAgain = () => (state.mode === 'daily' && state.daily !== today() ? 'classic' : state.mode);
 $('play').addEventListener('click', () => {
   $('chooser-note').hidden = !hasGame();
+  renderChooser();
   const c = meta.challenge?.date === today() ? meta.challenge : null;
   const who = challengeKind(today()) === 'cat' ? 'gatos' : 'cachorros';
   $('challenge-info').textContent = c
@@ -1117,7 +1161,7 @@ $('play').addEventListener('click', () => {
   $('chooser').showModal();
 });
 $('continue').addEventListener('click', () => show('game'));
-$('again').addEventListener('click', () => newGame(state.kind, !!state.daily && state.daily === today()));
+$('again').addEventListener('click', () => newGame(state.kind, sameAgain()));
 $('to-menu').addEventListener('click', () => show('menu'));
 $('pause').addEventListener('click', pause);
 $('pause-dialog').addEventListener('close', () => { // fecha por botão ou pela tecla Esc
@@ -1127,11 +1171,11 @@ $('pause-dialog').addEventListener('close', () => { // fecha por botão ou pela 
 $('resume').addEventListener('click', () => $('pause-dialog').close());
 $('restart').addEventListener('click', () => {
   $('pause-dialog').close();
-  newGame(state.kind, !!state.daily && state.daily === today());
+  newGame(state.kind, sameAgain());
 });
 $('challenge').addEventListener('click', () => {
   $('chooser').close();
-  newGame(null, true);
+  newGame(null, 'daily');
   show('game');
   toast('Desafio do dia');
 });

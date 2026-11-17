@@ -113,6 +113,13 @@ export function createSeededGame(kind, seed, rules = {}) {
 // O que vale numa partida. O modo clássico liga tudo; os outros modos desligam partes.
 export const DEFAULT_RULES = { clock: true, rivals: true, specials: true, events: true, timeLimit: 0 };
 
+// Modos de jogo e as regras de cada um.
+export const MODES = {
+  classic: {},
+  zen: { clock: false, rivals: false, events: false },
+  time: { clock: false, events: false, timeLimit: 90 },
+};
+
 export function createGame(kind = 'cat', rng = Math.random, rules = {}) {
   const state = {
     kind,
@@ -137,7 +144,9 @@ export function createGame(kind = 'cat', rng = Math.random, rules = {}) {
     warning: null, // { x, level, t }: intruso prestes a cair
     danger: 0,
     over: false,
+    overReason: '', // 'full' (lotou) ou 'time' (acabou o tempo)
   };
+  state.timeLeft = state.rules.timeLimit;
   state.timer = dropTime(state);
   return state;
 }
@@ -150,6 +159,8 @@ export function upgradeState(state) {
   state.weather ??= null;
   state.weatherAt ??= state.drops + FIRST_WEATHER;
   state.wet ??= 0;
+  state.timeLeft ??= state.rules.timeLimit;
+  state.mode ??= state.daily ? 'daily' : 'classic';
   for (const b of state.bodies) {
     b.special ??= null;
     b.sleep ??= 0;
@@ -371,7 +382,10 @@ export function step(state, dt = DT) {
 
   const above = state.bodies.some((b) => b.age > SETTLE && b.y - b.r < LINE_Y);
   state.danger = above ? state.danger + dt : 0;
-  if (state.danger > DANGER_LIMIT) state.over = true;
+  if (state.danger > DANGER_LIMIT) {
+    state.over = true;
+    state.overReason = 'full';
+  }
   return events;
 }
 
@@ -475,7 +489,17 @@ export function tick(state, dt = DT, rng = Math.random) {
     }
   }
 
-  if (canDrop(state)) {
+  if (state.rules.timeLimit) { // contra o tempo
+    state.timeLeft = Math.max(0, state.timeLeft - dt);
+    if (state.timeLeft <= 0) {
+      state.over = true;
+      state.overReason = 'time';
+      events.push({ type: 'timeup' });
+      return events;
+    }
+  }
+
+  if (state.rules.clock && canDrop(state)) {
     state.timer -= dt;
     if (state.timer <= 0) {
       drop(state, state.aim, rng);
