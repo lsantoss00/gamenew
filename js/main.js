@@ -1,10 +1,11 @@
 import {
   MODES, SPECIAL_NAMES, SLEEP_TIME, upgradeState,
-  createGame, createSeededGame, stateRng, drop, step, tick, canDrop, clampAim, dropTime, shake as shakeYard, bodyAt, removeBody, scareAll,
+  createGame, createSeededGame, stateRng, setGoal, drop, step, tick, canDrop, clampAim, dropTime, shake as shakeYard, bodyAt, removeBody, scareAll,
   W, H, LINE_Y, DROP_Y, DT, RADII, MAX_LEVEL, KINDS, NAMES,
 } from './game.js';
 import { animalSVG, wildSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
 import { paintScene, drawAmbient } from './scene.js';
+import { LEVEL_COUNT, levelSpec, goalText, goalProgress, levelStars, levelUnlocked, totalStars, finishLevel } from './levels.js';
 import {
   SCENES, POWERS, powerCost, recordStat, statValue, STAT_NAMES, TROPHIES, claimTrophies, claimDaily, STREAK_CAP, dateSeed, challengeKind, finishChallenge, CHALLENGE_REWARD, newMeta, validMeta, coinsForScore, chooseScene,
   today, dailyMissions, validMissions, missionText, progressMissions,
@@ -61,7 +62,7 @@ const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const save = () => store.set('miau.drop', state);
 
-const MODE_NAMES = { classic: 'Clássico', zen: 'Zen', time: 'Contra o tempo', daily: 'Desafio do dia' };
+const MODE_NAMES = { classic: 'Clássico', zen: 'Zen', time: 'Contra o tempo', daily: 'Desafio do dia', level: 'Fase' };
 // Recorde de cada modo (o do clássico é o recorde que já existia).
 function bestOf(mode) {
   if (mode === 'classic') return best;
@@ -82,7 +83,7 @@ function clockText(seconds) {
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 }
 // No desafio do dia o sorteio vem da semente guardada na partida; fora dele, é livre.
-const rngOf = () => (state.daily ? stateRng(state) : Math.random);
+const rngOf = () => (state.seed ? stateRng(state) : Math.random); // desafio do dia e fases têm sorteio fixo
 
 // --- Desenho ---
 
@@ -404,6 +405,19 @@ function draw(seconds) {
 
   for (const b of state.bodies) drawBody(b, seconds);
   drawWeather(seconds);
+  if (state.goal && !state.over) { // quantos bichos ainda dá para soltar nesta fase
+    const left = Math.max(0, state.dropLimit - state.drops);
+    const text = `${left} ${left === 1 ? 'bicho' : 'bichos'}`;
+    ctx.font = '800 14px "Baloo 2 Local", "Baloo 2", sans-serif';
+    const w = ctx.measureText(text).width + 20;
+    ctx.fillStyle = left <= 3 ? 'rgb(229 72 77 / 0.92)' : 'rgb(23 38 28 / 0.62)';
+    ctx.beginPath();
+    ctx.roundRect(8, H - 34, w, 26, 13);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.fillText(text, 18, H - 16);
+  }
 
   if (state.warning) { // o intruso espia por cima e uma seta mostra onde ele vai cair
     const { x, t, level } = state.warning;
@@ -500,11 +514,12 @@ function renderHud() {
   }
   // segunda caixa do placar: o tempo que falta, ou o recorde do modo
   const timed = state.rules.timeLimit > 0;
-  const boxValue = timed ? clockText(state.timeLeft) : fmt(bestOf(state.mode));
+  const boxValue = state.goal ? goalProgress(state.goal, state.kind) : timed ? clockText(state.timeLeft) : fmt(bestOf(state.mode));
   if (shownBest !== boxValue) {
     shownBest = boxValue;
-    $('best-label').textContent = timed ? 'Tempo' : 'Recorde';
+    $('best-label').textContent = state.goal ? 'Objetivo' : timed ? 'Tempo' : 'Recorde';
     $('best').textContent = boxValue;
+    $('best').classList.toggle('long', boxValue.length > 8);
     $('best-box').classList.toggle('low', timed && state.timeLeft <= 10);
   }
   const key = state.kind + state.next + state.nextSpecial;
@@ -516,8 +531,7 @@ function renderHud() {
     bump($('next'));
   }
   if (state.over && $('over').hidden) {
-    $('over-title').textContent = state.overReason === 'time' ? 'Tempo esgotado!' : 'Lotou!';
-    $('final').textContent = fmt(state.score);
+    renderOver();
     $('over').hidden = false;
   }
 }
@@ -557,11 +571,26 @@ const menuCtx = menuCanvas.getContext('2d');
 // Há partida para continuar? (começada e ainda não terminada)
 const hasGame = () => !state.over && state.drops > 0;
 
+// Tela de fim de partida, conforme o modo.
+function renderOver() {
+  const level = state.mode === 'level';
+  const won = level && state.won;
+  $('over-title').textContent = won ? `Fase ${state.level} concluída!`
+    : level ? 'Não foi dessa vez'
+      : state.overReason === 'time' ? 'Tempo esgotado!' : 'Lotou!';
+  $('over-stars').hidden = !won;
+  $('over-stars').innerHTML = [1, 2, 3].map((i) => `<span class="${i <= state.stars ? '' : 'off'}">★</span>`).join('');
+  $('over-text').innerHTML = level && !won
+    ? (state.overReason === 'drops' ? 'Acabaram os bichos antes do objetivo.' : 'O quintal lotou antes do objetivo.')
+    : `Você fez <b id="final">${fmt(state.score)}</b> pontos.`;
+  $('again').textContent = won ? (state.level < LEVEL_COUNT ? 'Próxima fase' : 'Ver fases') : level ? 'Tentar de novo' : 'Jogar de novo';
+}
+
 function renderMenu() {
   const going = hasGame();
   $('continue').hidden = !going;
   $('continue-info').textContent = going
-    ? `${MODE_NAMES[state.mode]} · ${state.kind === 'cat' ? 'Gatos' : 'Cachorros'} · ${fmt(state.score)} pontos` : '';
+    ? `${MODE_NAMES[state.mode]}${state.level ? ` ${state.level}` : ''} · ${state.kind === 'cat' ? 'Gatos' : 'Cachorros'} · ${fmt(state.score)} pontos` : '';
   const days = meta.streak?.last === today() ? meta.streak.days : 0;
   $('menu-streak').textContent = days > 1 ? ` · ${days} dias seguidos` : '';
   $('play').textContent = going ? 'Nova partida' : 'Jogar';
@@ -778,6 +807,68 @@ function finishDaily() {
   el.textContent = state.dailyReward
     ? `Desafio do dia concluído: +${state.dailyReward} moedas`
     : `Desafio do dia · seu melhor hoje: ${fmt(meta.challenge?.best ?? state.score)}`;
+}
+
+// Fim de uma fase: estrelas e recompensa (uma vez só por partida).
+function finishLevelGame() {
+  if (state.mode !== 'level' || state.levelDone) return;
+  state.levelDone = true;
+  state.levelReward = state.won ? finishLevel(meta, state.level, state.stars) : 0;
+  if (state.won) {
+    store.set('miau.meta', meta);
+    renderCoins();
+    if (!calm.matches) confetti(W, 40);
+    sfx.adopt();
+    checkTrophies();
+  }
+}
+
+// --- Mapa de fases ---
+
+function renderLevels() {
+  $('levels-total').textContent = `Estrelas: ${totalStars(meta)} de ${LEVEL_COUNT * 3}. Passe uma fase para liberar a seguinte.`;
+  const grid = $('level-grid');
+  grid.replaceChildren();
+  let nextUp = false;
+  for (let n = 1; n <= LEVEL_COUNT; n++) {
+    const stars = levelStars(meta, n);
+    const open = levelUnlocked(meta, n);
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.disabled = !open;
+    btn.innerHTML = `<b>${n}</b><small>${[1, 2, 3].map((i) => `<span class="${i <= stars ? '' : 'off'}">★</span>`).join('')}</small>`;
+    const spec = levelSpec(n);
+    btn.title = goalText(spec.goal, chosenKind(), spec.drops);
+    btn.setAttribute('aria-label', `Fase ${n}: ${open ? btn.title : 'bloqueada'}${stars ? `, ${stars} estrelas` : ''}`);
+    if (open && !stars && !nextUp) {
+      btn.classList.add('next-up');
+      nextUp = true;
+    }
+    btn.addEventListener('click', () => {
+      $('levels').close();
+      startLevel(n);
+    });
+    li.append(btn);
+    grid.append(li);
+  }
+}
+
+function startLevel(n) {
+  newGame(chosenKind(), 'level', n);
+  show('game');
+  const spec = levelSpec(n);
+  announce(`Fase ${n}: ${goalText(spec.goal, state.kind, spec.drops)}`);
+}
+
+// Mostra um aviso no meio do quintal por alguns segundos (sem atrapalhar o tutorial).
+let announceTimer = 0;
+function announce(text, seconds = 3.5) {
+  const el = $('coach');
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(announceTimer);
+  announceTimer = setTimeout(() => { if (el.textContent === text) el.hidden = true; }, seconds * 1000);
 }
 
 // Bônus por abrir o jogo: aparece uma vez por dia, no menu.
@@ -1014,7 +1105,8 @@ function frame(now) {
       sfx.over();
       track('game');
       track('kind', state.kind);
-      $('earned').textContent = `+${fmt(payout())}`;
+      finishLevelGame();
+      $('earned').textContent = `+${fmt(payout() + (state.levelReward ?? 0))}`;
       finishDaily();
       save();
     }
@@ -1043,7 +1135,7 @@ function release() {
   save();
 }
 
-function newGame(kind, mode = 'classic') {
+function newGame(kind, mode = 'classic', level = 0) {
   if (!state.over && state.score > 0) { // partida abandonada também rende moedas
     const paid = state.paid;
     const coins = payout();
@@ -1054,6 +1146,10 @@ function newGame(kind, mode = 'classic') {
     const date = today();
     state = createSeededGame(challengeKind(date), dateSeed(date));
     state.daily = date;
+  } else if (mode === 'level') { // fase: objetivo, limite de bichos e sorteio fixo
+    const spec = levelSpec(level);
+    state = setGoal(createSeededGame(kind, spec.seed, spec.rules), spec.goal, spec.drops);
+    state.level = level;
   } else {
     state = createGame(kind, Math.random, MODES[mode]);
   }
@@ -1145,14 +1241,31 @@ for (const btn of document.querySelectorAll('[data-species]')) {
 for (const btn of document.querySelectorAll('[data-mode]')) {
   btn.addEventListener('click', () => {
     $('chooser').close();
+    if (btn.dataset.mode === 'levels') {
+      renderLevels();
+      $('levels').showModal();
+      return;
+    }
     newGame(chosenKind(), btn.dataset.mode);
     show('game');
   });
 }
+$('levels-close').addEventListener('click', () => $('levels').close());
 const sameAgain = () => (state.mode === 'daily' && state.daily !== today() ? 'classic' : state.mode);
+// "Jogar de novo": nas fases, vai para a próxima (se venceu) ou repete a mesma.
+function playAgain() {
+  if (state.mode !== 'level') return newGame(state.kind, sameAgain());
+  if (state.won && state.level >= LEVEL_COUNT) {
+    show('menu');
+    renderLevels();
+    return $('levels').showModal();
+  }
+  startLevel(state.won ? state.level + 1 : state.level);
+}
 $('play').addEventListener('click', () => {
   $('chooser-note').hidden = !hasGame();
   renderChooser();
+  $('levels-info').textContent = totalStars(meta) ? `${totalStars(meta)} estrelas de ${LEVEL_COUNT * 3}` : '';
   const c = meta.challenge?.date === today() ? meta.challenge : null;
   const who = challengeKind(today()) === 'cat' ? 'gatos' : 'cachorros';
   $('challenge-info').textContent = c
@@ -1161,7 +1274,7 @@ $('play').addEventListener('click', () => {
   $('chooser').showModal();
 });
 $('continue').addEventListener('click', () => show('game'));
-$('again').addEventListener('click', () => newGame(state.kind, sameAgain()));
+$('again').addEventListener('click', playAgain);
 $('to-menu').addEventListener('click', () => show('menu'));
 $('pause').addEventListener('click', pause);
 $('pause-dialog').addEventListener('close', () => { // fecha por botão ou pela tecla Esc
@@ -1171,7 +1284,8 @@ $('pause-dialog').addEventListener('close', () => { // fecha por botão ou pela 
 $('resume').addEventListener('click', () => $('pause-dialog').close());
 $('restart').addEventListener('click', () => {
   $('pause-dialog').close();
-  newGame(state.kind, sameAgain());
+  if (state.mode === 'level') startLevel(state.level);
+  else newGame(state.kind, sameAgain());
 });
 $('challenge').addEventListener('click', () => {
   $('chooser').close();

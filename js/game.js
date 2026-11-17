@@ -161,6 +161,8 @@ export function upgradeState(state) {
   state.wet ??= 0;
   state.timeLeft ??= state.rules.timeLimit;
   state.mode ??= state.daily ? 'daily' : 'classic';
+  state.goal ??= null;
+  state.dropLimit ??= 0;
   for (const b of state.bodies) {
     b.special ??= null;
     b.sleep ??= 0;
@@ -192,7 +194,49 @@ export function clampAim(level, x) {
 }
 
 export function canDrop(state) {
-  return !state.over && state.cooldown <= 0;
+  return !state.over && state.cooldown <= 0 && !(state.dropLimit && state.drops >= state.dropLimit);
+}
+
+// --- Objetivo (modo de fases) ---
+// goal: { type: 'reach' | 'merges' | 'score' | 'scare', value, progress }
+export const OUT_OF_DROPS_WAIT = 4; // segundos para a pilha assentar depois do último bicho
+export function setGoal(state, goal, dropLimit) {
+  state.goal = { ...goal, progress: 0 };
+  state.dropLimit = dropLimit;
+  state.outT = 0;
+  state.won = false;
+  state.stars = 0;
+  return state;
+}
+
+// Estrelas pela quantidade de bichos usados: até 60% = 3, até 80% = 2, mais que isso = 1.
+export function starsFor(drops, dropLimit) {
+  const used = drops / dropLimit;
+  return used <= 0.6 ? 3 : used <= 0.8 ? 2 : 1;
+}
+
+function updateGoal(state, events, dt) {
+  const g = state.goal;
+  for (const e of events) {
+    if (g.type === 'merges' && (e.type === 'merge' || e.type === 'adopt')) g.progress++;
+    if (g.type === 'scare' && e.type === 'scare') g.progress++;
+    if (g.type === 'reach' && e.type === 'merge') g.progress = Math.max(g.progress, e.level);
+  }
+  if (g.type === 'score') g.progress = state.score;
+  if (g.progress >= g.value) {
+    g.progress = g.value;
+    state.over = true;
+    state.won = true;
+    state.overReason = 'won';
+    state.stars = starsFor(state.drops, state.dropLimit);
+    events.push({ type: 'won', stars: state.stars });
+  } else if (state.drops >= state.dropLimit) {
+    state.outT += dt;
+    if (state.outT >= OUT_OF_DROPS_WAIT) {
+      state.over = true;
+      state.overReason = 'drops';
+    }
+  }
 }
 
 export function drop(state, x = state.aim, rng = Math.random) {
@@ -386,6 +430,7 @@ export function step(state, dt = DT) {
     state.over = true;
     state.overReason = 'full';
   }
+  if (state.goal && !state.over) updateGoal(state, events, dt);
   return events;
 }
 

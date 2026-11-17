@@ -261,6 +261,16 @@ dialog h2 { margin: 0; font: 800 26px/1 var(--display); }
 .modes small { color: var(--accent); font-weight: 800; }
 .modes small:empty { display: none; }
 #best-box.low b { color: #e5484d; }
+#best-box b.long { font-size: 15px; line-height: 1.45; }
+.overlay .stars { margin: 0; font-size: 34px; line-height: 1; letter-spacing: 4px; color: #f5b301; text-shadow: 0 2px 0 rgb(0 0 0 / 0.15); }
+.overlay .stars .off { color: var(--cell); }
+.level-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.level-grid button { width: 100%; min-height: 0; aspect-ratio: 1; padding: 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.level-grid b { font: 800 20px/1 var(--display); }
+.level-grid small { font-size: 11px; letter-spacing: 1px; color: #f5b301; }
+.level-grid small .off { color: var(--cell); }
+.level-grid button:disabled { opacity: 0.45; cursor: default; }
+.level-grid .next-up { background: var(--accent); color: var(--on-accent); }
 #pause-dialog, #bonus { width: min(100% - 32px, 320px); text-align: center; }
 .challenge { margin-top: 16px; padding: 12px 14px 14px; border-radius: 14px; background: var(--panel); }
 .challenge h3 { margin: 0 0 4px; }

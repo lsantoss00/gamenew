@@ -3,6 +3,7 @@
 Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quintal e ele cai e rola; dois iguais que se encostam viram o próximo da linha (filhotinho → … → leão, ou → … → lobo).
 
 - Escolha jogar com gatos ou com cachorros; cada espécie tem 10 bichos.
+- Fases: 30 fases com um objetivo (juntar, chegar a um bicho, fazer pontos ou espantar intrusos) e um limite de bichos; até 3 estrelas por fase, conforme sobrem bichos. Cada fase tem sorteio fixo, igual a cada tentativa.
 - Modos: Clássico (com relógio, intrusos e eventos), Zen (sem relógio nem intrusos, rende metade das moedas) e Contra o tempo (90 segundos), cada um com o seu recorde.
 - Só os 4 menores são soltos; os maiores você consegue juntando.
 - Cada bicho tem poucos segundos para ser solto, senão cai sozinho; o tempo encurta ao longo da partida.
@@ -42,6 +43,7 @@ Esse é também o caminho mais curto para a Play Store: um app Android do tipo "
 
 - `js/game.js`: regras e física (sem tela, testadas em `test/`)
 - `js/art.js`: desenho dos bichos em SVG, com expressões
+- `js/levels.js`: as 30 fases e o progresso nelas (sem tela, testado em `test/`)
 - `js/meta.js`: moedas, missões diárias e loja (sem tela, testado em `test/`)
 - `js/scene.js`: cenários (quintal, praia, neve, cidade e espaço; dia e noite)
 - `js/fx.js`: partículas e efeitos visuais

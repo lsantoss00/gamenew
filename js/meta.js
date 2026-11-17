@@ -94,6 +94,8 @@ export function recordStat(meta, stat, value = 1) {
 export function statValue(meta, stat) {
   if (stat === 'streak') return meta.streak?.days ?? 0;
   if (stat === 'scenes') return meta.owned.length;
+  if (stat === 'levels') return Object.keys(meta.levels ?? {}).length;
+  if (stat === 'stars') return Object.values(meta.levels ?? {}).reduce((a, b) => a + b, 0);
   return meta.stats?.[stat] ?? 0;
 }
 
@@ -113,6 +115,9 @@ export const TROPHIES = [
   { id: 'score25k', name: 'Pontuação de respeito', text: 'Faça 25.000 pontos numa partida', stat: 'score', goal: 25000, reward: 400 },
   { id: 'streak7', name: 'Semana cheia', text: 'Abra o jogo 7 dias seguidos', stat: 'streak', goal: 7, reward: 300 },
   { id: 'scenes3', name: 'Viajante', text: 'Tenha 3 cenários', stat: 'scenes', goal: 3, reward: 200 },
+  { id: 'levels10', name: 'Desbravador', text: 'Passe 10 fases', stat: 'levels', goal: 10, reward: 300 },
+  { id: 'levels30', name: 'Fim da trilha', text: 'Passe as 30 fases', stat: 'levels', goal: 30, reward: 1000 },
+  { id: 'stars60', name: 'Chuva de estrelas', text: 'Junte 60 estrelas nas fases', stat: 'stars', goal: 60, reward: 500 },
 ];
 
 // Confere os troféus; os recém-conquistados pagam na hora e são devolvidos.

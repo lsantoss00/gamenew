@@ -118,5 +118,5 @@ test('estatísticas somam ou guardam o melhor; troféus pagam uma vez só', () =
   meta.streak = { last: '2026-01-07', days: 7 };
   assert.deepEqual(claimTrophies(meta).map((t) => t.id).sort(), ['scenes3', 'streak7']);
   assert.equal(new Set(TROPHIES.map((t) => t.id)).size, TROPHIES.length);
-  for (const t of TROPHIES) assert.ok(t.stat === 'streak' || t.stat === 'scenes' || STAT_NAMES[t.stat], t.id);
+  for (const t of TROPHIES) assert.ok(['streak', 'scenes', 'levels', 'stars'].includes(t.stat) || STAT_NAMES[t.stat], t.id);
 });
