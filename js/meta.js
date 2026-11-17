@@ -5,8 +5,10 @@ import { NAMES } from './game.js';
 
 export const SCENES = [
   { id: 'quintal', name: 'Quintal', price: 0 },
-  { id: 'praia', name: 'Praia', price: 400 },
-  { id: 'neve', name: 'Neve', price: 1000 },
+  { id: 'praia', name: 'Praia', price: 800 },
+  { id: 'neve', name: 'Neve', price: 2000 },
+  { id: 'cidade', name: 'Cidade', price: 3500 },
+  { id: 'espaco', name: 'Espaço', price: 5000 },
 ];
 
 export const newMeta = () => ({ coins: 0, owned: ['quintal'], scene: 'quintal' });

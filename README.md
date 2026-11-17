@@ -11,7 +11,7 @@ Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quint
 - Se um bicho ficar parado acima da linha tracejada, o quintal lotou e a partida acaba.
 - O álbum guarda todo bicho que você já conseguiu.
 - Cada partida rende moedas (1 a cada 50 pontos), e as 3 missões do dia rendem mais.
-- Na loja, as moedas compram cenários novos: praia e neve.
+- Na loja, as moedas compram cenários novos: praia, neve, cidade e espaço.
 - Durante a partida, as moedas também pagam poderes: sacudir o quintal, tirar um bicho e espantar todos os intrusos. O preço sobe a cada uso na mesma partida.
 
 ## Rodar
@@ -26,7 +26,7 @@ Não há dependências nem etapa de build: é HTML, CSS e JavaScript puros.
 - `js/game.js`: regras e física (sem tela, testadas em `test/`)
 - `js/art.js`: desenho dos bichos em SVG, com expressões
 - `js/meta.js`: moedas, missões diárias e loja (sem tela, testado em `test/`)
-- `js/scene.js`: cenários (quintal, praia e neve; dia e noite)
+- `js/scene.js`: cenários (quintal, praia, neve, cidade e espaço; dia e noite)
 - `js/fx.js`: partículas e efeitos visuais
 - `js/main.js`: tela (canvas), toque, teclado e salvamento
 - `js/sound.js`: efeitos sonoros e música de fundo, sintetizados

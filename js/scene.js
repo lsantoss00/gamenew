@@ -1,4 +1,4 @@
-// Cenários pintados por código: quintal, praia e neve.
+// Cenários pintados por código: quintal, praia, neve, cidade e espaço.
 // Cada um tem versão de dia (tema claro) e de noite (tema escuro).
 
 const DAY = {
@@ -456,7 +456,203 @@ function paintNeve(ctx, W, H, dark) {
   for (const dy of [-8, 2, 12]) circle(ctx, bx, by + dy, 2, '#231c19');
 }
 
-const PAINTERS = { quintal: paintQuintal, praia: paintPraia, neve: paintNeve };
+// --- Cidade: prédios, calçada, poste e hidrante ---
+
+function paintCidade(ctx, W, H, dark) {
+  const c = dark
+    ? { sky: ['#0b1533', '#3b3566'], orb: '#f4f1de', glow: 'rgb(244 241 222 / 0.18)', far: '#232a4d', near: ['#2f3760', '#39305c', '#27405f'],
+      win: '#ffd866', winOff: '#1c2242', walk: ['#5b6072', '#454a5c'], joint: 'rgb(0 0 0 / 0.22)', curb: '#30344a', metal: '#2a2d3d', lamp: '#ffe9a3', red: '#a23b3b' }
+    : { sky: ['#69c0f5', '#ffe3c4'], orb: '#fff3b0', glow: 'rgb(255 243 176 / 0.45)', far: '#b7c7e6', near: ['#f2a65a', '#e87d6f', '#6fa8dc'],
+      win: '#fff6d6', winOff: '#8fb7d9', walk: ['#d9dbe3', '#b9bcc9'], joint: 'rgb(0 0 0 / 0.1)', curb: '#9a9db0', metal: '#5a5f73', lamp: '#fff3b0', red: '#e5484d' };
+  const rnd = seeded(31);
+  const GROUND = 344;
+  sky(ctx, W, H, GROUND, c.sky[0], c.sky[1]);
+  if (dark) stars(ctx, W, rnd);
+  orb(ctx, 296, 58, c.orb, c.glow);
+
+  // prédios ao fundo
+  ctx.fillStyle = c.far;
+  for (let x = -6; x < W; x += 34) {
+    const h = 70 + rnd() * 90;
+    ctx.fillRect(x, GROUND - h, 30, h + 10);
+  }
+  // prédios da frente, com janelas
+  let x = 0;
+  for (let i = 0; x < W; i++) {
+    const w = 46 + rnd() * 34;
+    const h = 60 + rnd() * 110;
+    const top = GROUND - h;
+    ctx.fillStyle = c.near[i % 3];
+    ctx.fillRect(x, top, w - 4, h + 10);
+    ctx.fillStyle = 'rgb(0 0 0 / 0.12)';
+    ctx.fillRect(x + w - 12, top, 8, h + 10);
+    for (let wy = top + 10; wy < GROUND - 16; wy += 20) {
+      for (let wx = x + 7; wx < x + w - 20; wx += 14) {
+        ctx.fillStyle = rnd() < (dark ? 0.55 : 0.8) ? c.win : c.winOff;
+        ctx.fillRect(wx, wy, 8, 11);
+      }
+    }
+    x += w;
+  }
+
+  // calçada em lajotas, com a guia
+  const walk = ctx.createLinearGradient(0, GROUND, 0, H);
+  walk.addColorStop(0, c.walk[0]);
+  walk.addColorStop(1, c.walk[1]);
+  ctx.fillStyle = walk;
+  ctx.fillRect(0, GROUND, W, H - GROUND);
+  ctx.fillStyle = c.curb;
+  ctx.fillRect(0, GROUND, W, 7);
+  ctx.strokeStyle = c.joint;
+  ctx.lineWidth = 1.5;
+  for (let y = GROUND + 36; y < H; y += 36) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  for (let row = 0, y = GROUND + 7; y < H; row++, y += 36) {
+    for (let vx = (row % 2) * 30; vx < W; vx += 60) {
+      ctx.beginPath();
+      ctx.moveTo(vx, y);
+      ctx.lineTo(vx, Math.min(H, y + (row ? 36 : 29)));
+      ctx.stroke();
+    }
+  }
+
+  // poste de luz
+  ctx.fillStyle = c.metal;
+  ctx.fillRect(52, 196, 6, GROUND - 190);
+  ctx.fillRect(44, GROUND - 2, 22, 10);
+  ctx.fillRect(52, 196, 34, 6);
+  if (dark) {
+    const glow = ctx.createRadialGradient(84, 208, 2, 84, 208, 70);
+    glow.addColorStop(0, 'rgb(255 233 163 / 0.5)');
+    glow.addColorStop(1, 'rgb(255 233 163 / 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(14, 138, 140, 140);
+  }
+  ctx.fillStyle = c.lamp;
+  ctx.beginPath();
+  ctx.moveTo(76, 202);
+  ctx.lineTo(94, 202);
+  ctx.lineTo(90, 214);
+  ctx.lineTo(80, 214);
+  ctx.closePath();
+  ctx.fill();
+
+  // hidrante
+  const hx = 300;
+  const hy = GROUND + 6;
+  ctx.fillStyle = c.red;
+  ctx.fillRect(hx - 9, hy - 34, 18, 34);
+  ctx.fillRect(hx - 13, hy - 6, 26, 8);
+  ctx.fillRect(hx - 16, hy - 26, 32, 8);
+  ctx.beginPath();
+  ctx.arc(hx, hy - 34, 9, Math.PI, 0);
+  ctx.fill();
+  ctx.fillRect(hx - 3, hy - 48, 6, 6);
+  ctx.fillStyle = 'rgb(255 255 255 / 0.25)';
+  ctx.fillRect(hx - 6, hy - 32, 3, 24);
+}
+
+// --- Espaço: lua de queijo... digo, de crateras, planetas e estrelas ---
+
+function paintEspaco(ctx, W, H, dark) {
+  const c = dark
+    ? { sky: ['#07061a', '#2a1650'], ground: ['#8d8fa6', '#5e607a'], crater: 'rgb(0 0 0 / 0.22)', rim: 'rgb(255 255 255 / 0.18)', planet: ['#ff9f6b', '#c45a7a'], ring: '#ffd9a8', small: '#7fd6c2', flag: '#e5484d' }
+    : { sky: ['#1d1b52', '#6a4fb0'], ground: ['#c9cbe0', '#9799b8'], crater: 'rgb(40 40 90 / 0.2)', rim: 'rgb(255 255 255 / 0.4)', planet: ['#ffb37a', '#e06b8b'], ring: '#ffe6bf', small: '#8fe3cf', flag: '#ff5d5d' };
+  const rnd = seeded(123);
+  const GROUND = 348;
+  sky(ctx, W, H, GROUND, c.sky[0], c.sky[1]);
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 90; i++) {
+    ctx.globalAlpha = 0.3 + rnd() * 0.7;
+    ctx.beginPath();
+    ctx.arc(rnd() * W, rnd() * GROUND, 0.5 + rnd() * 1.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // nebulosa
+  for (const [x, y, r, color] of [[70, 110, 110, 'rgb(255 120 200 / 0.14)'], [250, 220, 130, 'rgb(90 200 255 / 0.12)']]) {
+    const g = ctx.createRadialGradient(x, y, 4, x, y, r);
+    g.addColorStop(0, color);
+    g.addColorStop(1, 'rgb(0 0 0 / 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+
+  // planeta com anel
+  const px = 286;
+  const py = 70;
+  ctx.strokeStyle = c.ring;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.ellipse(px, py, 52, 13, -0.35, Math.PI * 0.02, Math.PI * 0.98);
+  ctx.stroke();
+  const planet = ctx.createLinearGradient(px - 30, py - 30, px + 30, py + 30);
+  planet.addColorStop(0, c.planet[0]);
+  planet.addColorStop(1, c.planet[1]);
+  circle(ctx, px, py, 30, planet);
+  ctx.strokeStyle = 'rgb(255 255 255 / 0.25)';
+  ctx.lineWidth = 3;
+  for (const dy of [-10, 4, 15]) {
+    ctx.beginPath();
+    ctx.moveTo(px - 26, py + dy);
+    ctx.quadraticCurveTo(px, py + dy + 6, px + 26, py + dy);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = c.ring;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.ellipse(px, py, 52, 13, -0.35, Math.PI * 1.02, Math.PI * 1.98);
+  ctx.stroke();
+  circle(ctx, 60, 190, 13, c.small);
+  circle(ctx, 56, 186, 3, 'rgb(0 0 0 / 0.15)');
+
+  // chão da lua, com crateras
+  const ground = ctx.createLinearGradient(0, GROUND, 0, H);
+  ground.addColorStop(0, c.ground[0]);
+  ground.addColorStop(1, c.ground[1]);
+  ctx.fillStyle = ground;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  ctx.lineTo(0, GROUND + 10);
+  ctx.quadraticCurveTo(W / 2, GROUND - 26, W, GROUND + 10);
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+  for (let i = 0; i < 11; i++) {
+    const x = 16 + rnd() * (W - 32);
+    const y = GROUND + 34 + rnd() * (H - GROUND - 50);
+    const r = 8 + rnd() * 16;
+    ctx.fillStyle = c.crater;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = c.rim;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r * 0.42, 0, 0.1, Math.PI - 0.1);
+    ctx.stroke();
+  }
+
+  // bandeira fincada, com uma pata
+  ctx.strokeStyle = '#e8e8f0';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(92, GROUND + 14);
+  ctx.lineTo(92, GROUND - 62);
+  ctx.stroke();
+  ctx.fillStyle = c.flag;
+  ctx.fillRect(93, GROUND - 62, 38, 25);
+  ctx.fillStyle = '#fff';
+  circle(ctx, 112, GROUND - 46, 4.5, '#fff');
+  for (const [dx, dy] of [[-7, -6], [-2.5, -9.5], [2.5, -9.5], [7, -6]]) circle(ctx, 112 + dx, GROUND - 46 + dy, 2, '#fff');
+}
+
+const PAINTERS = { quintal: paintQuintal, praia: paintPraia, neve: paintNeve, cidade: paintCidade, espaco: paintEspaco };
 
 export function paintScene(ctx, W, H, dark, id = 'quintal') {
   (PAINTERS[id] ?? paintQuintal)(ctx, W, H, dark);
@@ -464,6 +660,31 @@ export function paintScene(ctx, W, H, dark, id = 'quintal') {
 
 // O que se mexe no fundo, desenhado a cada quadro: nuvens, ou neve caindo.
 export function drawAmbient(ctx, W, H, seconds, dark, id = 'quintal') {
+  if (id === 'espaco') { // estrelas piscando e, de vez em quando, uma estrela cadente
+    const rnd = seeded(77);
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 26; i++) {
+      const x = rnd() * W;
+      const y = rnd() * 330;
+      ctx.globalAlpha = 0.25 + 0.75 * Math.abs(Math.sin(seconds * (0.6 + rnd()) + i));
+      ctx.beginPath();
+      ctx.arc(x, y, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const t = (seconds % 7) / 0.9; // uma passagem de 0,9 s a cada 7 s
+    if (t < 1) {
+      ctx.globalAlpha = 1 - t;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(40 + t * 200, 40 + t * 90);
+      ctx.lineTo(10 + t * 200, 26 + t * 90);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    return;
+  }
   if (id !== 'neve') {
     drawClouds(ctx, W, seconds, dark);
     return;
