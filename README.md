@@ -20,7 +20,8 @@ Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quint
 - Abrir o jogo em dias seguidos rende um bônus que cresce até o 7º dia.
 - O desafio do dia tem a mesma sequência de bichos para todo mundo e paga 150 moedas na primeira partida.
 - No fim da partida, "Compartilhar resultado" gera uma imagem do quintal com os pontos e o maior bicho, para salvar ou mandar.
-- Há 15 troféus com recompensa em moedas e uma tela com os números da conta.
+- Em Ajustes (no menu e na pausa): volume da música, volume dos efeitos, vibração e rever o tutorial.
+- Há 19 troféus com recompensa em moedas e uma tela com os números da conta.
 - Durante a partida, as moedas também pagam poderes: sacudir o quintal, tirar um bicho e espantar todos os intrusos. O preço sobe a cada uso na mesma partida.
 
 ## Rodar
@@ -51,4 +52,4 @@ Esse é também o caminho mais curto para a Play Store: um app Android do tipo "
 - `js/scene.js`: cenários (quintal, praia, neve, cidade e espaço; dia e noite)
 - `js/fx.js`: partículas e efeitos visuais
 - `js/main.js`: tela (canvas), toque, teclado e salvamento
-- `js/sound.js`: efeitos sonoros e música de fundo, sintetizados
+- `js/sound.js`: efeitos sonoros e música de fundo, sintetizados, com volume ajustável

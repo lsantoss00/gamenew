@@ -12,7 +12,7 @@ import {
   today, dailyMissions, validMissions, missionText, progressMissions,
 } from './meta.js';
 import { burst, dust, poof, confetti, fling, updateFx, drawFx, clearFx } from './fx.js';
-import { sfx, setAudioMode, unlockAudio, startMusic, stopMusic, setMusicTension } from './sound.js';
+import { sfx, setVolumes, unlockAudio, startMusic, stopMusic, setMusicTension } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString('pt-BR');
@@ -54,11 +54,11 @@ let shake = 0; // segundos de tremor que restam
 let active = false; // o relógio só corre depois do primeiro toque nesta visita
 let screen = 'menu'; // 'menu' ou 'game'
 let paused = false;
-const AUDIO_MODES = ['all', 'sfx', 'off'];
-const AUDIO_LABELS = { all: 'Som e música', sfx: 'Só efeitos', off: 'Sem som' };
-let audioMode = store.get('miau.audio', store.get('miau.sound', true) ? 'all' : 'off');
-if (!AUDIO_MODES.includes(audioMode)) audioMode = 'all';
-setAudioMode(audioMode);
+// Ajustes. Quem usava o botão antigo de som (som e música / só efeitos / sem som) mantém a escolha.
+const OLD_AUDIO = { all: [0.7, 1], sfx: [0, 1], off: [0, 0] }[store.get('miau.audio', 'all')] ?? [0.7, 1];
+const settings = { music: OLD_AUDIO[0], sfx: OLD_AUDIO[1], vibrate: true, ...store.get('miau.settings', {}) };
+setVolumes(settings.music, settings.sfx);
+const buzz = (ms) => settings.vibrate && navigator.vibrate?.(ms);
 const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const save = () => store.set('miau.drop', state);
@@ -1229,7 +1229,7 @@ function handle(events) {
     }
     changed = true;
   }
-  if (events.some((e) => e.type === 'merge' || e.type === 'adopt' || e.type === 'scare')) navigator.vibrate?.(12);
+  if (events.some((e) => e.type === 'merge' || e.type === 'adopt' || e.type === 'scare')) buzz(12);
   if (changed) save();
 }
 
@@ -1502,20 +1502,47 @@ $('trophies-btn').addEventListener('click', () => {
   $('trophies').showModal();
 });
 $('trophies-close').addEventListener('click', () => $('trophies').close());
-const soundBtns = document.querySelectorAll('.sound-toggle'); // um no menu, outro na pausa
-function renderSound() {
-  for (const btn of soundBtns) btn.textContent = AUDIO_LABELS[audioMode];
+// --- Ajustes ---
+
+function renderSettings() {
+  $('set-music').value = Math.round(settings.music * 100);
+  $('set-sfx').value = Math.round(settings.sfx * 100);
+  $('set-music-out').textContent = `${$('set-music').value}%`;
+  $('set-sfx-out').textContent = `${$('set-sfx').value}%`;
+  $('set-vibrate').checked = settings.vibrate;
 }
-for (const btn of soundBtns) {
-  btn.addEventListener('click', () => { // alterna: som e música -> só efeitos -> sem som
-    audioMode = AUDIO_MODES[(AUDIO_MODES.indexOf(audioMode) + 1) % AUDIO_MODES.length];
-    store.set('miau.audio', audioMode);
+function saveSettings() {
+  store.set('miau.settings', settings);
+  setVolumes(settings.music, settings.sfx);
+  renderSettings();
+}
+for (const btn of document.querySelectorAll('.settings-btn')) { // um no menu, outro na pausa
+  btn.addEventListener('click', () => {
     unlockAudio();
-    setAudioMode(audioMode);
-    renderSound();
+    renderSettings();
+    $('settings').showModal();
   });
 }
-renderSound();
+$('set-music').addEventListener('input', () => {
+  settings.music = $('set-music').value / 100;
+  saveSettings();
+});
+$('set-sfx').addEventListener('input', () => {
+  settings.sfx = $('set-sfx').value / 100;
+  saveSettings();
+});
+$('set-sfx').addEventListener('change', () => sfx.coin()); // amostra do volume ao soltar o controle
+$('set-vibrate').addEventListener('change', () => {
+  settings.vibrate = $('set-vibrate').checked;
+  saveSettings();
+  buzz(30);
+});
+$('settings-close').addEventListener('click', () => $('settings').close());
+$('set-tutorial').addEventListener('click', () => {
+  $('settings').close();
+  $('pause-dialog').close();
+  $('replay').click();
+});
 document.addEventListener('pointerdown', unlockAudio, { once: true }); // a música já começa no menu
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {

@@ -20,7 +20,7 @@
   <section class="screen" id="menu">
     <div class="bar">
       <div class="coins" id="coins-chip" title="Moedas"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f5b301" stroke="#b97d00" stroke-width="1.6"/><ellipse cx="12" cy="14.6" rx="4.2" ry="3.4" fill="#b97d00"/><circle cx="6.9" cy="10.6" r="1.7" fill="#b97d00"/><circle cx="10.2" cy="7.6" r="1.7" fill="#b97d00"/><circle cx="13.8" cy="7.6" r="1.7" fill="#b97d00"/><circle cx="17.1" cy="10.6" r="1.7" fill="#b97d00"/></svg><b id="coins">0</b></div>
-      <button class="pill sound-toggle" type="button">Som e música</button>
+      <button class="pill settings-btn" type="button" aria-label="Ajustes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm8.4 2.3-1.9-.3a6.8 6.8 0 0 0-.7-1.6l1.1-1.6-1.6-1.6-1.6 1.1c-.5-.3-1-.5-1.6-.7l-.3-1.9h-2.3l-.3 1.9c-.6.2-1.1.4-1.6.7L6 5.7 4.4 7.3l1.1 1.6c-.3.5-.5 1-.7 1.6l-1.9.3v2.3l1.9.3c.2.6.4 1.1.7 1.6l-1.1 1.6L6 18.3l1.6-1.1c.5.3 1 .5 1.6.7l.3 1.9h2.3l.3-1.9c.6-.2 1.1-.4 1.6-.7l1.6 1.1 1.6-1.6-1.1-1.6c.3-.5.5-1 .7-1.6l1.9-.3z" fill="currentColor"/></svg>Ajustes</button>
     </div>
 
     <div class="hero">
@@ -129,6 +129,31 @@
   <div class="stack"><button class="primary" id="share-send" type="button" hidden>Enviar</button></div>
 </dialog>
 
+<dialog id="settings" aria-labelledby="settings-title">
+  <div class="dialog-head">
+    <h2 id="settings-title">Ajustes</h2>
+    <button id="settings-close" type="button">Fechar</button>
+  </div>
+  <div class="setting">
+    <label for="set-music">Música</label>
+    <input type="range" id="set-music" min="0" max="100" step="5">
+    <output id="set-music-out" for="set-music"></output>
+  </div>
+  <div class="setting">
+    <label for="set-sfx">Efeitos sonoros</label>
+    <input type="range" id="set-sfx" min="0" max="100" step="5">
+    <output id="set-sfx-out" for="set-sfx"></output>
+  </div>
+  <div class="setting check">
+    <label for="set-vibrate">Vibrar ao juntar bichos</label>
+    <input type="checkbox" id="set-vibrate">
+  </div>
+  <div class="stack">
+    <button id="set-tutorial" type="button">Rever o tutorial</button>
+  </div>
+  <p class="small credits">Fontes Baloo 2 e Nunito, sob a SIL Open Font License. Desenhos, música e sons feitos para o jogo.</p>
+</dialog>
+
 <dialog id="trophies" aria-labelledby="trophies-title">
   <div class="dialog-head">
     <h2 id="trophies-title">Troféus</h2>
@@ -190,7 +215,7 @@
     <button class="primary big" id="resume" type="button">Continuar</button>
     <button id="restart" type="button">Recomeçar</button>
     <button id="quit" type="button">Sair para o menu</button>
-    <button class="sound-toggle" type="button">Som e música</button>
+    <button class="settings-btn" type="button">Ajustes</button>
   </div>
 </dialog>
 

@@ -1,15 +1,18 @@
 // Efeitos sonoros e música sintetizados na hora (sem arquivos de áudio).
 
 let ctx = null;
-let enabled = true;
+let sfxVolume = 1;
+let musicVolume = 1;
 let lastThud = 0;
 
-// 'all' = efeitos e música, 'sfx' = só efeitos, 'off' = silêncio.
-export function setAudioMode(mode) {
-  enabled = mode !== 'off';
-  musicWanted = mode === 'all';
-  if (musicWanted) startMusic();
-  else stopMusic();
+// Volumes de 0 a 1. Zero desliga (a música nem toca).
+export function setVolumes(music, effects) {
+  sfxVolume = effects;
+  musicVolume = music;
+  musicWanted = music > 0;
+  if (!musicWanted) stopMusic();
+  else if (musicTimer) musicGain.gain.setTargetAtTime(MUSIC_LEVEL * musicVolume, ctx.currentTime, 0.1);
+  else startMusic();
 }
 
 // O navegador só libera áudio depois de um toque: chamar no primeiro toque.
@@ -22,7 +25,8 @@ export function unlockAudio() {
 }
 
 function tone(from, to, duration, type = 'sine', volume = 0.12, delay = 0) {
-  if (!enabled || !ctx || ctx.state !== 'running') return;
+  if (sfxVolume <= 0 || !ctx || ctx.state !== 'running') return;
+  volume *= sfxVolume;
   const t = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -100,6 +104,7 @@ const CHORDS = [
 ];
 
 let musicWanted = true;
+const MUSIC_LEVEL = 0.5; // volume da música no máximo do ajuste
 let musicTimer = 0;
 let musicGain = null;
 let noise = null;
@@ -166,7 +171,7 @@ export function startMusic() {
   }
   musicGain.gain.cancelScheduledValues(ctx.currentTime);
   musicGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-  musicGain.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + 0.4);
+  musicGain.gain.exponentialRampToValueAtTime(MUSIC_LEVEL * musicVolume, ctx.currentTime + 0.4);
   nextTime = ctx.currentTime + 0.06;
   musicTimer = setInterval(schedule, 80);
   schedule();
