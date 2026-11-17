@@ -31,6 +31,7 @@
       <button id="missions-btn" type="button">Missões <span id="missions-count"></span></button>
       <button id="shop-btn" type="button">Loja</button>
       <button id="album-btn" type="button">Álbum</button>
+      <button id="trophies-btn" type="button">Troféus <span id="trophies-count"></span></button>
     </nav>
     <p class="record">Recorde: <b id="menu-best">0</b> pontos<span id="menu-streak"></span></p>
   </section>
@@ -89,6 +90,16 @@
   </div>
   <ul class="missions" id="missions-list"></ul>
   <p>Amanhã tem missões novas.</p>
+</dialog>
+
+<dialog id="trophies" aria-labelledby="trophies-title">
+  <div class="dialog-head">
+    <h2 id="trophies-title">Troféus</h2>
+    <button id="trophies-close" type="button">Fechar</button>
+  </div>
+  <ul class="missions" id="trophies-list"></ul>
+  <h3>Seus números</h3>
+  <dl class="stats" id="stats-list"></dl>
 </dialog>
 
 <dialog id="shop" aria-labelledby="shop-title">

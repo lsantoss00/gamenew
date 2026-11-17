@@ -14,6 +14,7 @@ Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quint
 - Na loja, as moedas compram cenários novos: praia, neve, cidade e espaço.
 - Abrir o jogo em dias seguidos rende um bônus que cresce até o 7º dia.
 - O desafio do dia tem a mesma sequência de bichos para todo mundo e paga 150 moedas na primeira partida.
+- Há 15 troféus com recompensa em moedas e uma tela com os números da conta.
 - Durante a partida, as moedas também pagam poderes: sacudir o quintal, tirar um bicho e espantar todos os intrusos. O preço sobe a cada uso na mesma partida.
 
 ## Rodar

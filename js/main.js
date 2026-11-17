@@ -5,7 +5,7 @@ import {
 import { animalSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
 import { paintScene, drawAmbient } from './scene.js';
 import {
-  SCENES, POWERS, powerCost, claimDaily, STREAK_CAP, dateSeed, challengeKind, finishChallenge, CHALLENGE_REWARD, newMeta, validMeta, coinsForScore, chooseScene,
+  SCENES, POWERS, powerCost, recordStat, statValue, STAT_NAMES, TROPHIES, claimTrophies, claimDaily, STREAK_CAP, dateSeed, challengeKind, finishChallenge, CHALLENGE_REWARD, newMeta, validMeta, coinsForScore, chooseScene,
   today, dailyMissions, validMissions, missionText, progressMissions,
 } from './meta.js';
 import { burst, dust, poof, confetti, fling, updateFx, drawFx, clearFx } from './fx.js';
@@ -395,6 +395,7 @@ function renderMenu() {
   $('menu-best').textContent = fmt(best);
   renderCoins(false);
   renderMissionCount();
+  renderTrophyCount();
 }
 
 function show(name) {
@@ -405,6 +406,7 @@ function show(name) {
     save();
     refreshMissions();
     offerDailyBonus();
+    checkTrophies();
     renderMenu();
   } else {
     resize();
@@ -463,6 +465,7 @@ function powerAvailable(id) {
 function charge(id) {
   if (!spend(costOf(id))) return false;
   state.used = { ...state.used, [id]: used(id) + 1 };
+  track('power');
   save();
   return true;
 }
@@ -525,6 +528,36 @@ function earn(amount) {
   renderCoins();
 }
 
+// Mapa de acontecimento do jogo -> estatística da conta.
+const STAT_OF = { merge: 'merges', combo: 'combo', reach: 'level', score: 'score', scare: 'scares', drop: 'drops', game: 'games', adopt: 'adopts', power: 'powers' };
+
+function renderTrophyCount() {
+  $('trophies-count').textContent = `${meta.trophies?.length ?? 0}/${TROPHIES.length}`;
+}
+
+// Confere os troféus e avisa dos novos (já pagos em moedas).
+function checkTrophies() {
+  const won = claimTrophies(meta);
+  if (!won.length) return;
+  store.set('miau.meta', meta);
+  renderCoins();
+  renderTrophyCount();
+  toast(`Troféu: ${won[0].name}! +${won.reduce((a, t) => a + t.reward, 0)} moedas`);
+  sfx.coin();
+}
+
+function renderTrophies() {
+  $('trophies-list').innerHTML = TROPHIES.map((t) => {
+    const done = meta.trophies?.includes(t.id);
+    const value = Math.min(statValue(meta, t.stat), t.goal);
+    return `<li class="${done ? 'done' : ''}"><span class="text"><b>${t.name}</b>${t.text}</span>` +
+      `<span class="reward">${COIN}${t.reward}</span><div class="bar"><i style="width:${Math.round((value / t.goal) * 100)}%"></i></div>` +
+      `<small>${done ? 'Conquistado' : `${fmt(value)} de ${fmt(t.goal)}`}</small></li>`;
+  }).join('');
+  $('stats-list').innerHTML = Object.entries(STAT_NAMES)
+    .map(([stat, name]) => `<dt>${name}</dt><dd>${fmt(statValue(meta, stat))}</dd>`).join('');
+}
+
 function renderMissionCount() {
   $('missions-count').textContent = `${missions.list.filter((m) => m.done).length}/${missions.list.length}`;
 }
@@ -539,6 +572,12 @@ function refreshMissions() {
 
 // Registra um acontecimento nas missões; as que forem concluídas pagam na hora.
 function track(type, value) {
+  if (STAT_OF[type]) { // o mesmo acontecimento alimenta as estatísticas e os troféus
+    recordStat(meta, STAT_OF[type], value);
+    if (type === 'game') recordStat(meta, 'total', state.score);
+    store.set('miau.meta', meta);
+    checkTrophies();
+  }
   const before = missions.list.map((m) => m.progress).join();
   for (const m of progressMissions(missions, type, value)) {
     earn(m.reward);
@@ -735,6 +774,7 @@ function handle(events) {
       if (!calm.matches) confetti(W);
       shake = 0.4;
       sfx.adopt();
+      track('adopt');
     } else if (e.type === 'scare') {
       floatText(e.x, e.y, `Xô! +${e.gained}`, 18, '#ffb3b3');
       poof(e.x, e.y, RADII[e.level - 1]);
@@ -952,7 +992,15 @@ $('shop-btn').addEventListener('click', () => {
   renderShop();
   $('shop').showModal();
 });
-$('shop-close').addEventListener('click', () => $('shop').close());
+$('shop-close').addEventListener('click', () => {
+  $('shop').close();
+  checkTrophies(); // comprar cenários também conta
+});
+$('trophies-btn').addEventListener('click', () => {
+  renderTrophies();
+  $('trophies').showModal();
+});
+$('trophies-close').addEventListener('click', () => $('trophies').close());
 const soundBtns = document.querySelectorAll('.sound-toggle'); // um no menu, outro na pausa
 function renderSound() {
   for (const btn of soundBtns) btn.textContent = AUDIO_LABELS[audioMode];
