@@ -18,6 +18,8 @@ if (!body) throw new Error('index.html sem os marcadores <!-- app -->');
 writeFileSync(out, [
   pick(/<title>.*?<\/title>/),
   '<meta name="claude:viewport-fit-sides" content="cover">',
+  // reserva para as fontes, caso a moldura do Artifact não sirva os arquivos de fonte do jogo
+  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@600;700&display=swap">',
   ...html.match(/<link rel="stylesheet"[^>]*>/g),
   body.trim(),
   '',

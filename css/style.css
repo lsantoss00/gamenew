@@ -1,4 +1,9 @@
 /* Layout: duas telas de coluna única — o menu (cenário, jogar, loja) e o jogo (placar e quintal). */
+/* Fontes incluídas no jogo (funcionam sem internet). O nome "Local" evita confusão
+   com a mesma família vinda da web, que fica como reserva. */
+@font-face { font-family: 'Baloo 2 Local'; src: url('../fonts/baloo2-latin.woff2') format('woff2'); font-weight: 400 800; font-display: swap; }
+@font-face { font-family: 'Nunito Local'; src: url('../fonts/nunito-latin.woff2') format('woff2'); font-weight: 200 1000; font-display: swap; }
+
 :root {
   --bg: #eaf2ea;
   --fg: #17261c;
@@ -12,8 +17,8 @@
   --shadow: rgb(23 38 28 / 0.16);
   --cat: #e8590c;
   --dog: #2563c9;
-  --display: 'Baloo 2', 'Trebuchet MS', system-ui, sans-serif;
-  --body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display: 'Baloo 2 Local', 'Baloo 2', 'Trebuchet MS', system-ui, sans-serif;
+  --body: 'Nunito Local', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {

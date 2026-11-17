@@ -282,7 +282,7 @@ function draw(seconds) {
     const k = e.t / e.life;
     if (e.text) {
       const bounce = calm.matches ? 1 : 1 + 0.7 * Math.exp(-14 * e.t); // entra grande e assenta
-      ctx.font = `800 ${e.size * bounce}px "Baloo 2", "Trebuchet MS", sans-serif`;
+      ctx.font = `800 ${e.size * bounce}px "Baloo 2 Local", "Baloo 2", "Trebuchet MS", sans-serif`;
       ctx.textAlign = 'center';
       ctx.globalAlpha = 1 - k * k;
       ctx.lineWidth = 4;
@@ -1034,3 +1034,9 @@ introTip();
 state.aim = clampAim(state.current, state.aim);
 show('menu');
 requestAnimationFrame(frame);
+
+// Funcionamento sem internet. Só vale no site próprio do jogo: dentro de outra
+// página (uma moldura) ou sem https o navegador não permite, e o jogo segue igual.
+if ('serviceWorker' in navigator && window.top === window) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}

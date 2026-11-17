@@ -26,6 +26,17 @@ npm test    # testa as regras e a física
 
 Não há dependências nem etapa de build: é HTML, CSS e JavaScript puros.
 
+## Instalar e jogar sem internet
+
+Hospedado num endereço `https` próprio, o jogo é instalável: o navegador do celular oferece "Adicionar à tela inicial" e ele abre em tela cheia, com ícone, sem barra de endereço. Depois da primeira visita funciona sem internet (as fontes vêm junto com o jogo e os arquivos ficam guardados pelo `sw.js`).
+
+- `manifest.webmanifest`: nome, cores e ícones do app
+- `sw.js`: guarda os arquivos para uso sem internet; ao mudar a lista de arquivos do jogo, atualize `FILES` e o número em `CACHE`
+- `icons/`: ícone em SVG e PNG; `node scripts/build-icons.mjs` refaz o SVG a partir dos desenhos do jogo
+- `fonts/`: as duas fontes do jogo (licença em `fonts/README.md`)
+
+Esse é também o caminho mais curto para a Play Store: um app Android do tipo "Trusted Web Activity" só embrulha o endereço onde o jogo está hospedado, e pode ser gerado a partir dele (por exemplo com o PWABuilder ou o Bubblewrap), sem reescrever nada.
+
 - `js/game.js`: regras e física (sem tela, testadas em `test/`)
 - `js/art.js`: desenho dos bichos em SVG, com expressões
 - `js/meta.js`: moedas, missões diárias e loja (sem tela, testado em `test/`)
