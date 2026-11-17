@@ -135,3 +135,18 @@ test('acessórios: compra uma vez, troca e tira', async () => {
   assert.equal(chooseAccessory(meta, null), true);
   assert.equal(meta.acc, null);
 });
+
+test('álbum: uma curiosidade por bicho e contagem de aparições', async () => {
+  const { FACTS, see, timesSeen } = await import('../js/album.js');
+  const { NAMES } = await import('../js/game.js');
+  for (const kind of ['cat', 'dog']) {
+    assert.equal(FACTS[kind].length, NAMES[kind].length);
+    for (const fact of FACTS[kind]) assert.ok(fact.length > 30 && fact.endsWith('.'));
+  }
+  const meta = newMeta();
+  assert.equal(timesSeen(meta, 'dog', 4), 0);
+  see(meta, 'dog', 4);
+  see(meta, 'dog', 4);
+  see(meta, 'cat', 10);
+  assert.deepEqual([timesSeen(meta, 'dog', 4), timesSeen(meta, 'cat', 10), timesSeen(meta, 'cat', 4)], [2, 1, 0]);
+});

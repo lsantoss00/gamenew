@@ -1,9 +1,9 @@
 // Deixa o jogo abrir sem internet: guarda os arquivos na primeira visita e,
 // nas seguintes, responde do que está guardado enquanto busca a versão nova.
-const CACHE = 'miau-v2';
+const CACHE = 'miau-v3';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
-  'js/main.js', 'js/game.js', 'js/art.js', 'js/scene.js', 'js/fx.js', 'js/sound.js', 'js/meta.js', 'js/levels.js',
+  'js/main.js', 'js/game.js', 'js/art.js', 'js/scene.js', 'js/fx.js', 'js/sound.js', 'js/meta.js', 'js/levels.js', 'js/album.js',
   'fonts/baloo2-latin.woff2', 'fonts/nunito-latin.woff2',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
 ];

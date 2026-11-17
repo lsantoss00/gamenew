@@ -296,6 +296,15 @@ dialog h3.d { color: var(--dog); }
 .album .face { aspect-ratio: 1; height: auto; }
 .album .locked { color: var(--muted); }
 .album .q { font: 800 22px/1 var(--display); color: var(--muted); }
+.album button { width: 100%; min-height: 0; padding: 0; background: none; box-shadow: none; display: flex; flex-direction: column; align-items: center; gap: 3px; font: inherit; color: inherit; }
+.album button:active { transform: scale(0.96); }
+.album button[aria-pressed="true"] .face { outline: 3px solid var(--accent); outline-offset: 2px; }
+.card { display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: start; margin: 4px 0 8px; padding: 12px; border-radius: 16px; background: var(--panel); animation: appear 180ms ease-out; }
+.card-face .face { width: 96px; height: 96px; border-radius: 18px; }
+.card-text { min-width: 0; }
+.card h3 { margin: 2px 0 2px; font: 800 22px/1.1 var(--display); letter-spacing: 0; text-transform: none; color: var(--fg); }
+.card p { margin: 0 0 6px; font-size: 14px; }
+.card #card-fact { color: var(--fg); font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
   .toast, .coach, .weather, .bump, .overlay > *, .screen, .hero h1, .parade div { animation: none; }

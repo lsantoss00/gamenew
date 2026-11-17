@@ -5,6 +5,7 @@ import {
 } from './game.js';
 import { animalSVG, wildSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
 import { paintScene, drawAmbient } from './scene.js';
+import { FACTS, see, timesSeen } from './album.js';
 import { LEVEL_COUNT, levelSpec, goalText, goalProgress, levelStars, levelUnlocked, totalStars, finishLevel } from './levels.js';
 import {
   SCENES, ACCESSORIES, chooseAccessory, POWERS, powerCost, recordStat, statValue, STAT_NAMES, TROPHIES, claimTrophies, claimDaily, STREAK_CAP, dateSeed, challengeKind, finishChallenge, CHALLENGE_REWARD, newMeta, validMeta, coinsForScore, chooseScene,
@@ -553,14 +554,30 @@ function unlock(level, announce) {
 }
 
 function renderAlbum() {
+  $('album-card').hidden = true;
+  $('album-hint').hidden = false;
   for (const kind of KINDS) {
     $(`album-${kind}`).innerHTML = NAMES[kind].map((name, i) => {
       const got = i + 1 <= album[kind];
-      return `<li class="${got ? '' : 'locked'}">` +
-        (got ? face(kind, i + 1) : '<div class="face"><span class="q">?</span></div>') +
-        `<span>${got ? name : '???'}</span></li>`;
+      return `<li class="${got ? '' : 'locked'}">` + (got
+        ? `<button type="button" data-card="${kind}:${i + 1}" aria-pressed="false">${face(kind, i + 1)}<span>${name}</span></button>`
+        : '<div class="face"><span class="q">?</span></div><span>???</span>') + '</li>';
     }).join('');
   }
+}
+
+// Ficha de um bicho: desenho, nível, quantas vezes apareceu e uma curiosidade.
+function showCard(kind, level) {
+  $('card-face').innerHTML = face(kind, level, null, meta.acc);
+  $('card-name').textContent = NAMES[kind][level - 1];
+  const n = timesSeen(meta, kind, level);
+  $('card-meta').textContent = `${kind === 'cat' ? 'Gato' : 'Cachorro'} · nível ${level} de ${MAX_LEVEL} · ` +
+    (n ? `apareceu ${fmt(n)} ${n === 1 ? 'vez' : 'vezes'} no seu quintal` : 'apareceu antes da contagem começar');
+  $('card-fact').textContent = FACTS[kind][level - 1];
+  $('album-card').hidden = false;
+  $('album-hint').hidden = true;
+  for (const btn of document.querySelectorAll('[data-card]')) btn.setAttribute('aria-pressed', String(btn.dataset.card === `${kind}:${level}`));
+  $('album-card').scrollIntoView({ block: 'nearest' });
 }
 
 // --- Telas: menu e jogo ---
@@ -1092,6 +1109,7 @@ function handle(events) {
       if (e.level >= 6) shake = 0.25;
       sfx.merge(e.level, e.combo);
       unlock(e.level, true);
+      see(meta, state.kind, e.level);
       track('merge');
       track('combo', e.combo);
       track('reach', e.level);
@@ -1117,6 +1135,7 @@ function handle(events) {
       sfx.rival();
     } else if (e.type === 'autodrop') {
       sfx.drop();
+      countDropped();
       unlock(state.current, false);
       track('drop');
     }
@@ -1170,8 +1189,15 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// Conta no álbum o bicho que acabou de cair.
+function countDropped() {
+  const b = state.bodies[state.bodies.length - 1];
+  if (b && !b.rival && b.special !== 'wild') see(meta, state.kind, b.level);
+}
+
 function release() {
   if (!drop(state, state.aim, rngOf())) return;
+  countDropped();
   sfx.drop();
   if (tutorial?.step === 'aim') tip('merge');
   if (learningBasics()) state.next = 1;
@@ -1356,6 +1382,12 @@ $('album-btn').addEventListener('click', () => {
   $('album').showModal();
 });
 $('album-close').addEventListener('click', () => $('album').close());
+$('album').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-card]');
+  if (!btn) return;
+  const [kind, level] = btn.dataset.card.split(':');
+  showCard(kind, Number(level));
+});
 $('missions-btn').addEventListener('click', () => {
   refreshMissions();
   renderMissions();

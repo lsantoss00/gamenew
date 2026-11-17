@@ -11,7 +11,7 @@ Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quint
 - Junções em sequência valem combo e multiplicam os pontos.
 - Dois bichos de nível máximo são adotados: somem e dão 5.000 pontos.
 - Se um bicho ficar parado acima da linha tracejada, o quintal lotou e a partida acaba.
-- O álbum guarda todo bicho que você já conseguiu.
+- O álbum guarda todo bicho que você já conseguiu, com uma ficha para cada um: quantas vezes apareceu no seu quintal e uma curiosidade real sobre a raça.
 - Cada partida rende moedas (1 a cada 50 pontos), e as 3 missões do dia rendem mais.
 - Na loja, as moedas compram cenários novos: praia, neve, cidade e espaço.
 - A loja também vende acessórios que todos os seus bichos passam a usar: laço, cachecol, óculos escuros, chapéu de festa e coroa.
@@ -45,6 +45,7 @@ Esse é também o caminho mais curto para a Play Store: um app Android do tipo "
 - `js/game.js`: regras e física (sem tela, testadas em `test/`)
 - `js/art.js`: desenho dos bichos em SVG, com expressões
 - `js/levels.js`: as 30 fases e o progresso nelas (sem tela, testado em `test/`)
+- `js/album.js`: curiosidades das fichas do álbum e a contagem de aparições
 - `js/meta.js`: moedas, missões diárias e loja (sem tela, testado em `test/`)
 - `js/scene.js`: cenários (quintal, praia, neve, cidade e espaço; dia e noite)
 - `js/fx.js`: partículas e efeitos visuais
