@@ -189,3 +189,25 @@ export function tileColor(kind, level) {
     ? `hsl(${48 - i * 5} 92% ${86 - i * 3}%)`
     : `hsl(${188 + i * 8} 75% ${86 - i * 3.5}%)`;
 }
+
+// O curinga: uma bola de arco-íris com uma estrela e uma carinha feliz.
+export function wildSVG() {
+  const colors = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#4dabf7', '#9775fa'];
+  const slices = colors.map((c, i) => {
+    const a0 = (i / colors.length) * Math.PI * 2 - Math.PI / 2;
+    const a1 = ((i + 1) / colors.length) * Math.PI * 2 - Math.PI / 2;
+    const p = (a) => `${(Math.cos(a) * HEAD_R).toFixed(2)} ${(Math.sin(a) * HEAD_R).toFixed(2)}`;
+    return `<path d="M0 0L${p(a0)}A${HEAD_R} ${HEAD_R} 0 0 1 ${p(a1)}Z" fill="${c}"/>`;
+  }).join('');
+  const star = Array.from({ length: 10 }, (_, i) => {
+    const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+    const d = i % 2 ? 13 : 30;
+    return `${(Math.cos(a) * d).toFixed(1)},${(Math.sin(a) * d - 4).toFixed(1)}`;
+  }).join(' ');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-75 -78 150 150" aria-hidden="true">` +
+    `<defs><radialGradient id="wildshine" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>` +
+    `<g>${slices}</g><circle r="${HEAD_R}" fill="url(#wildshine)" stroke="#5f3dc4" stroke-width="3"/>` +
+    `<polygon points="${star}" fill="#fff" stroke="#5f3dc4" stroke-width="2.5" stroke-linejoin="round"/>` +
+    `<circle cx="-6" cy="-6" r="2.6" fill="${INK}"/><circle cx="6" cy="-6" r="2.6" fill="${INK}"/>` +
+    `<path d="M-6 2q6 6 12 0" fill="none" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+}

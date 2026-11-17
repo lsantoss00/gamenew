@@ -218,3 +218,70 @@ test('partidas com a mesma semente sorteiam os mesmos bichos e intrusos', () => 
   const saved = JSON.parse(JSON.stringify(createSeededGame('dog', 99))); // a semente sobrevive ao salvar
   assert.ok(Number.isInteger(saved.seed) && saved.seed > 0);
 });
+
+function special(state, kind, level, x, y) {
+  const b = body(state, level, x, y);
+  b.special = kind;
+  if (kind === 'sleepy') b.sleep = 6;
+  return b;
+}
+
+test('curinga junta com qualquer bicho e vira o próximo dele', () => {
+  const s = createGame();
+  const r = RADII[4];
+  body(s, 5, 100, H - r);
+  special(s, 'wild', 2, 100, H - 2 * r - RADII[1] - 2); // cai em cima do bicho grande
+  const events = run(s, 0.5).filter((e) => e.type === 'merge');
+  assert.equal(events.length, 1);
+  assert.ok(events[0].wild);
+  assert.deepEqual(s.bodies.map((b) => b.level), [6]);
+});
+
+test('dourado avisa que rendeu moedas ao ser juntado', () => {
+  const s = createGame();
+  special(s, 'gold', 3, 100, H - RADII[2]);
+  body(s, 3, 100 + 2 * RADII[2] - 1, H - RADII[2]);
+  const [merge] = run(s, 0.5).filter((e) => e.type === 'merge');
+  assert.equal(merge.gold, true);
+});
+
+test('dorminhoco só junta depois de acordar', () => {
+  const s = createGame();
+  special(s, 'sleepy', 2, 100, H - RADII[1]);
+  body(s, 2, 100, H - 3 * RADII[1] - 2); // cai e fica em cima do dorminhoco
+  run(s, 3);
+  assert.equal(s.bodies.length, 2);
+  run(s, 4);
+  assert.deepEqual(s.bodies.map((b) => b.level), [3]);
+});
+
+test('latido empurra os vizinhos uma vez e vira um bicho comum', () => {
+  const s = createGame();
+  const near = body(s, 1, 150, H - RADII[0]);
+  const far = body(s, 1, 340, H - RADII[0]);
+  const dog = special(s, 'bark', 3, 190, H - RADII[2] - 40);
+  const events = run(s, 0.6).filter((e) => e.type === 'bark');
+  assert.equal(events.length, 1);
+  assert.equal(dog.special, null);
+  assert.ok(near.x < 140, `o vizinho deveria ter sido empurrado (x=${near.x})`);
+  assert.ok(Math.abs(far.x - 340) < 1, 'quem está longe não se mexe');
+});
+
+test('especiais só aparecem depois de alguns bichos e só se a regra estiver ligada', () => {
+  const count = (rules) => {
+    let n = 0;
+    for (let g = 0; g < 20; g++) {
+      const s = createSeededGame('cat', g + 1, rules);
+      const rng = stateRng(s);
+      for (let i = 0; i < 60; i++) {
+        if (i < 8) assert.equal(s.currentSpecial, null);
+        if (s.currentSpecial) n++;
+        s.cooldown = 0;
+        drop(s, 180, rng);
+      }
+    }
+    return n;
+  };
+  assert.ok(count({}) > 20);
+  assert.equal(count({ specials: false }), 0);
+});

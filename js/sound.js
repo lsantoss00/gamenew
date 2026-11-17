@@ -53,6 +53,10 @@ export const sfx = {
   },
   scare: () => tone(900, 250, 0.28, 'sawtooth', 0.05),
   shake: () => [0, 1, 2, 3].forEach((i) => tone(140 + (i % 2) * 60, 90, 0.09, 'triangle', 0.1, i * 0.07)),
+  bark: () => {
+    tone(420, 260, 0.09, 'square', 0.07);
+    tone(460, 280, 0.1, 'square', 0.07, 0.12);
+  },
   coin: () => {
     tone(988, 988, 0.08, 'square', 0.05);
     tone(1319, 1319, 0.22, 'square', 0.05, 0.08);

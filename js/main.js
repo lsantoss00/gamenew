@@ -1,8 +1,9 @@
 import {
+  SPECIAL_NAMES, SLEEP_TIME, upgradeState,
   createGame, createSeededGame, stateRng, drop, step, tick, canDrop, clampAim, dropTime, shake as shakeYard, bodyAt, removeBody, scareAll,
   W, H, LINE_Y, DROP_Y, DT, RADII, MAX_LEVEL, KINDS, NAMES,
 } from './game.js';
-import { animalSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
+import { animalSVG, wildSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
 import { paintScene, drawAmbient } from './scene.js';
 import {
   SCENES, POWERS, powerCost, recordStat, statValue, STAT_NAMES, TROPHIES, claimTrophies, claimDaily, STREAK_CAP, dateSeed, challengeKind, finishChallenge, CHALLENGE_REWARD, newMeta, validMeta, coinsForScore, chooseScene,
@@ -39,7 +40,7 @@ function validState(s) {
 }
 
 const saved = store.get('miau.drop', null);
-let state = validState(saved) ? saved : createGame('cat');
+let state = validState(saved) ? upgradeState(saved) : createGame('cat');
 let best = store.get('miau.drop.best', 0);
 const album = store.get('miau.album', { cat: 0, dog: 0 });
 const savedMeta = store.get('miau.meta', null);
@@ -73,7 +74,8 @@ const rivalKind = () => (state.kind === 'cat' ? 'dog' : 'cat');
 function sprite(kind, level, mood = 'normal') {
   const key = `${kind}${level}:${mood}`;
   if (!sprites[key]) {
-    const svg = animalSVG(kind, level, mood).replace('<svg ', '<svg width="300" height="300" ');
+    const art = kind === 'wild' ? wildSVG() : animalSVG(kind, level, mood);
+    const svg = art.replace('<svg ', '<svg width="300" height="300" ');
     const img = new Image();
     img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     sprites[key] = img;
@@ -157,8 +159,76 @@ function trackImpacts(elapsed) {
   }
 }
 
+// O que aparece quando um especial entra na fila.
+const SPECIAL_TIPS = {
+  wild: 'Vem aí um curinga: ele junta com qualquer bicho!',
+  gold: 'Vem aí um dourado: juntá-lo rende moedas.',
+  bark: 'Vem aí um barulhento: ao cair, ele empurra os vizinhos.',
+  sleepy: 'Vem aí um dorminhoco: ele só junta depois de acordar.',
+};
+const GOLD_COINS = 15; // moedas por juntar um bicho dourado
+
+// Enfeites dos especiais, desenhados por cima do bicho (sem girar junto).
+function decorate(special, x, y, r, seconds, sleep = 0) {
+  if (special === 'gold') {
+    ctx.beginPath();
+    ctx.arc(x, y, r + 2, 0, Math.PI * 2);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#f5b301';
+    ctx.stroke();
+    for (let i = 0; i < 3; i++) { // brilhos girando em volta
+      const a = seconds * 1.6 + (i * Math.PI * 2) / 3;
+      const k = 0.5 + 0.5 * Math.sin(seconds * 5 + i);
+      const sx = x + Math.cos(a) * (r + 6);
+      const sy = y + Math.sin(a) * (r + 6);
+      ctx.fillStyle = `rgb(255 236 153 / ${0.4 + 0.6 * k})`;
+      ctx.beginPath();
+      for (let p = 0; p < 8; p++) {
+        const pa = (p / 8) * Math.PI * 2;
+        const d = p % 2 ? 1.5 : 4 + k * 2;
+        ctx.lineTo(sx + Math.cos(pa) * d, sy + Math.sin(pa) * d);
+      }
+      ctx.fill();
+    }
+  } else if (special === 'bark') { // ondas de som dos dois lados
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 2; i++) {
+      const k = (seconds * 1.5 + i * 0.5) % 1;
+      ctx.strokeStyle = `rgb(255 255 255 / ${0.9 * (1 - k)})`;
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.arc(x, y, r + 4 + k * 12, side < 0 ? Math.PI * 0.8 : -Math.PI * 0.2, side < 0 ? Math.PI * 1.2 : Math.PI * 0.2);
+        ctx.stroke();
+      }
+    }
+    ctx.lineCap = 'butt';
+  } else if (special === 'sleepy' && sleep > 0) { // zzz subindo e o tempo até acordar
+    ctx.font = '800 14px "Baloo 2 Local", "Baloo 2", sans-serif';
+    ctx.textAlign = 'center';
+    for (let i = 0; i < 3; i++) {
+      const k = (seconds * 0.6 + i / 3) % 1;
+      ctx.globalAlpha = Math.sin(k * Math.PI);
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = 'rgb(0 0 0 / 0.4)';
+      ctx.lineWidth = 3;
+      const tx = x + r * 0.6 + k * 14;
+      const ty = y - r * 0.6 - k * 26;
+      ctx.strokeText('z', tx, ty);
+      ctx.fillText('z', tx, ty);
+    }
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (sleep / SLEEP_TIME));
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgb(160 140 255 / 0.9)';
+    ctx.stroke();
+  }
+}
+
 function moodOf(b, seconds) {
   if (b.rival) return 'angry';
+  if (b.sleep > 0) return 'blink';
   if (state.over) return 'scared';
   if (b.r0 < RADII[b.level - 1] && b.age < 0.8) return 'happy'; // acabou de nascer de uma junção
   if (state.danger > 0 && b.y - b.r < LINE_Y + 30) return 'scared';
@@ -188,7 +258,9 @@ function drawBody(b, seconds) {
     ctx.fillStyle = 'rgb(229 72 77 / 0.35)';
     ctx.fill();
   }
-  drawAnimal(b.rival ? rivalKind() : state.kind, b.level, moodOf(b, seconds), b.x, b.y, b.r, b.angle, sx, sy);
+  const kind = b.rival ? rivalKind() : (b.special === 'wild' ? 'wild' : state.kind);
+  drawAnimal(kind, b.level, moodOf(b, seconds), b.x, b.y, b.r, b.angle, sx, sy);
+  if (b.special) decorate(b.special, b.x, b.y, b.r, seconds, b.sleep);
 }
 
 function draw(seconds) {
@@ -264,7 +336,9 @@ function draw(seconds) {
     const sway = calm.matches ? 0 : Math.sin(seconds * 3) * 0.08 + (urgent ? Math.sin(seconds * 40) * 0.06 : 0);
     const y = DROP_Y + (calm.matches ? 0 : Math.sin(seconds * 2.2) * 2.5);
     const mood = urgent ? 'scared' : (seconds % 3.3 < 0.13 ? 'blink' : 'normal');
-    drawAnimal(state.kind, state.current, mood, state.aim, y, r, sway, 1, 1, ready ? 1 : 0.35);
+    const special = state.currentSpecial;
+    drawAnimal(special === 'wild' ? 'wild' : state.kind, state.current, special === 'sleepy' ? 'blink' : mood, state.aim, y, r, sway, 1, 1, ready ? 1 : 0.35);
+    if (special && ready) decorate(special, state.aim, y, r, seconds, special === 'sleepy' ? SLEEP_TIME : 0);
     if (ready && clockOn()) { // relógio: o anel vai sumindo até o bicho cair sozinho
       ctx.beginPath();
       ctx.arc(state.aim, y, r + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (state.timer / dropTime(state)));
@@ -306,8 +380,10 @@ function draw(seconds) {
 
 // --- Placar, avisos e álbum ---
 
-function face(kind, level) {
-  return `<div class="face" style="background:${tileColor(kind, level)}">${animalSVG(kind, level)}</div>`;
+function face(kind, level, special = null) {
+  if (special === 'wild') return `<div class="face special wild">${wildSVG()}</div>`;
+  const mood = special === 'sleepy' ? 'blink' : 'normal';
+  return `<div class="face${special ? ` special ${special}` : ''}" style="background:${tileColor(kind, level)}">${animalSVG(kind, level, mood)}</div>`;
 }
 
 function bump(el) { // reinicia a animação de "pulo" do elemento
@@ -335,10 +411,12 @@ function renderHud() {
     shownBest = best;
     $('best').textContent = fmt(best);
   }
-  const key = state.kind + state.next;
+  const key = state.kind + state.next + state.nextSpecial;
   if (key !== shownNext) {
     shownNext = key;
-    $('next').innerHTML = face(state.kind, state.next);
+    $('next').innerHTML = face(state.kind, state.next, state.nextSpecial);
+    $('next').title = state.nextSpecial ? SPECIAL_NAMES[state.nextSpecial] : '';
+    if (state.nextSpecial) toast(SPECIAL_TIPS[state.nextSpecial]);
     bump($('next'));
   }
   if (state.over && $('over').hidden) {
@@ -400,6 +478,7 @@ function renderMenu() {
 
 function show(name) {
   screen = name;
+  document.body.classList.toggle('in-game', name === 'game');
   $('menu').hidden = name !== 'menu';
   $('game').hidden = name !== 'game';
   if (name === 'menu') {
@@ -750,7 +829,21 @@ function handle(events) {
   if (!events.length) return;
   let changed = false;
   for (const e of events) {
+    if (e.gold) {
+      earn(GOLD_COINS);
+      floatText(e.x, e.y + 26, `+${GOLD_COINS} moedas`, 18, '#ffd43b');
+      burst(e.x, e.y, { n: 14, speed: 220, size: 6, colors: ['#ffd43b', '#f5b301', '#fff'] });
+      sfx.coin();
+    }
+    if (e.type === 'bark') {
+      ring(e.x, e.y, e.r * 3);
+      floatText(e.x, e.y - e.r, state.kind === 'cat' ? 'Miau!' : 'Au!', 24, '#fff');
+      shake = Math.max(shake, 0.2);
+      sfx.bark();
+      continue;
+    }
     if (e.type === 'merge') {
+      if (e.wild) burst(e.x, e.y, { n: 16, speed: 240, size: 6, colors: ['#ff6b6b', '#ffd43b', '#69db7c', '#4dabf7', '#9775fa'] });
       ring(e.x, e.y, RADII[e.level - 1]);
       burst(e.x, e.y, {
         n: 8 + e.level * 2, speed: 150 + e.level * 28, size: 5 + e.level * 0.6,
