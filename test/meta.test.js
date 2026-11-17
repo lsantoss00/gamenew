@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SCENES, POWERS, powerCost, newMeta, validMeta, coinsForScore, chooseScene,
+  SCENES, POWERS, powerCost, recordStat, statValue, TROPHIES, claimTrophies, STAT_NAMES, claimDaily, DAILY_BONUS, STREAK_CAP, dateSeed, challengeKind, finishChallenge, CHALLENGE_REWARD, newMeta, validMeta, coinsForScore, chooseScene,
   today, dailyMissions, validMissions, missionText, progressMissions,
 } from '../js/meta.js';
 
@@ -72,4 +72,51 @@ test('missões que somam, que guardam o melhor valor e a de espécie', () => {
 test('poderes ficam mais caros a cada uso na mesma partida', () => {
   const { id, price } = POWERS[0];
   assert.deepEqual([0, 1, 2].map((used) => powerCost(id, used)), [price, price * 2, price * 3]);
+});
+
+test('bônus diário: uma vez por dia, cresce em dias seguidos e zera se pular um dia', () => {
+  const meta = newMeta();
+  assert.equal(claimDaily(meta, '2026-02-27'), DAILY_BONUS);
+  assert.equal(claimDaily(meta, '2026-02-27'), 0);
+  assert.equal(claimDaily(meta, '2026-02-28'), DAILY_BONUS * 2);
+  assert.equal(claimDaily(meta, '2026-03-01'), DAILY_BONUS * 3); // vira o mês
+  assert.equal(meta.coins, DAILY_BONUS * 6);
+  assert.equal(claimDaily(meta, '2026-03-03'), DAILY_BONUS); // pulou o dia 2
+  assert.equal(meta.streak.days, 1);
+  for (let d = 4; d <= 20; d++) claimDaily(meta, `2026-03-${String(d).padStart(2, '0')}`);
+  assert.equal(claimDaily(meta, '2026-03-21'), DAILY_BONUS * STREAK_CAP); // tem teto
+});
+
+test('desafio do dia: mesma semente na mesma data, recompensa só na primeira partida', () => {
+  assert.equal(dateSeed('2026-11-17'), dateSeed('2026-11-17'));
+  assert.notEqual(dateSeed('2026-11-17'), dateSeed('2026-11-18'));
+  assert.ok(['cat', 'dog'].includes(challengeKind('2026-11-17')));
+  const meta = newMeta();
+  assert.equal(finishChallenge(meta, '2026-11-17', 3000), CHALLENGE_REWARD);
+  assert.equal(finishChallenge(meta, '2026-11-17', 5000), 0);
+  assert.equal(finishChallenge(meta, '2026-11-17', 1000), 0);
+  assert.equal(meta.challenge.best, 5000);
+  assert.equal(finishChallenge(meta, '2026-11-18', 10), CHALLENGE_REWARD); // dia novo
+  assert.deepEqual([meta.challenge.best, meta.coins], [10, CHALLENGE_REWARD * 2]);
+});
+
+test('estatísticas somam ou guardam o melhor; troféus pagam uma vez só', () => {
+  const meta = newMeta();
+  assert.deepEqual(claimTrophies(meta), []);
+  recordStat(meta, 'merges');
+  recordStat(meta, 'merges', 4);
+  recordStat(meta, 'combo', 5);
+  recordStat(meta, 'combo', 2);
+  assert.deepEqual([statValue(meta, 'merges'), statValue(meta, 'combo'), statValue(meta, 'games')], [5, 5, 0]);
+
+  const combo = TROPHIES.find((t) => t.id === 'combo5');
+  assert.deepEqual(claimTrophies(meta).map((t) => t.id), ['combo5']);
+  assert.equal(meta.coins, combo.reward);
+  assert.deepEqual(claimTrophies(meta), []);
+
+  meta.owned.push('praia', 'neve'); // troféus que olham outras partes da conta
+  meta.streak = { last: '2026-01-07', days: 7 };
+  assert.deepEqual(claimTrophies(meta).map((t) => t.id).sort(), ['scenes3', 'streak7']);
+  assert.equal(new Set(TROPHIES.map((t) => t.id)).size, TROPHIES.length);
+  for (const t of TROPHIES) assert.ok(t.stat === 'streak' || t.stat === 'scenes' || STAT_NAMES[t.stat], t.id);
 });

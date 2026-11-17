@@ -226,7 +226,17 @@ dialog::backdrop { background: rgb(0 0 0 / 0.5); }
 .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
 dialog h2 { margin: 0; font: 800 26px/1 var(--display); }
 .stack { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
-#pause-dialog { width: min(100% - 32px, 320px); text-align: center; }
+#pause-dialog, #bonus { width: min(100% - 32px, 320px); text-align: center; }
+.challenge { margin-top: 16px; padding: 12px 14px 14px; border-radius: 14px; background: var(--panel); }
+.challenge h3 { margin: 0 0 4px; }
+.challenge p { margin: 0 0 10px; font-size: 14px; }
+.challenge button { width: 100%; background: var(--cell); }
+.streak { list-style: none; margin: 0 0 14px; padding: 0; display: flex; justify-content: center; gap: 6px; }
+.streak li { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--cell); color: var(--muted); font: 800 13px/1 var(--display); }
+.streak li.on { background: var(--accent); color: var(--on-accent); }
+.streak li.now { outline: 3px solid var(--fg); outline-offset: 1px; }
+.big-earned { justify-content: center; color: var(--fg); }
+.big-earned b { font: 800 26px/1 var(--display); }
 .dialog-head button { flex: none; min-height: 40px; }
 dialog p { margin: 10px 0 14px; color: var(--muted); }
 dialog h3 { margin: 14px 0 8px; font: 700 13px/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; }

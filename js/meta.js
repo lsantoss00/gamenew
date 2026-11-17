@@ -33,6 +33,99 @@ export function chooseScene(meta, id) {
   return true;
 }
 
+// --- Bônus diário: moedas por abrir o jogo, mais a cada dia seguido (até o 7º) ---
+export const DAILY_BONUS = 50;
+export const STREAK_CAP = 7;
+
+function dayBefore(date) {
+  const [y, m, d] = date.split('-').map(Number);
+  return today(new Date(y, m - 1, d - 1));
+}
+
+// Devolve as moedas do bônus de hoje (já somadas), ou 0 se hoje já foi recebido.
+export function claimDaily(meta, date = today()) {
+  const streak = meta.streak ?? { last: '', days: 0 };
+  if (streak.last === date) return 0;
+  const days = streak.last === dayBefore(date) ? streak.days + 1 : 1;
+  meta.streak = { last: date, days };
+  const reward = DAILY_BONUS * Math.min(days, STREAK_CAP);
+  meta.coins += reward;
+  return reward;
+}
+
+// --- Desafio do dia: mesma sequência de bichos para todo mundo na mesma data ---
+export const CHALLENGE_REWARD = 150;
+
+export function dateSeed(date) {
+  let s = 7;
+  for (const ch of date) s = (s * 31 + ch.charCodeAt(0)) % 2147483647;
+  return s;
+}
+
+export const challengeKind = (date) => (dateSeed(date) % 2 ? 'cat' : 'dog');
+
+// Registra o fim de uma partida do desafio. Devolve as moedas ganhas (só na primeira do dia).
+export function finishChallenge(meta, date, score) {
+  const c = meta.challenge?.date === date ? meta.challenge : { date, best: 0, rewarded: false };
+  c.best = Math.max(c.best, score);
+  const reward = c.rewarded ? 0 : CHALLENGE_REWARD;
+  c.rewarded = true;
+  meta.challenge = c;
+  meta.coins += reward;
+  return reward;
+}
+
+// --- Estatísticas e troféus ---
+// Números da conta toda. Alguns somam, outros guardam o melhor valor.
+const STAT_MAX = new Set(['combo', 'level', 'score']);
+export const STAT_NAMES = {
+  games: 'Partidas jogadas', total: 'Pontos somados', score: 'Melhor partida', merges: 'Junções',
+  combo: 'Maior combo', level: 'Maior bicho (nível)', scares: 'Intrusos espantados', adopts: 'Adoções',
+  drops: 'Bichos soltos', powers: 'Poderes usados',
+};
+
+export function recordStat(meta, stat, value = 1) {
+  meta.stats ??= {};
+  const now = meta.stats[stat] ?? 0;
+  meta.stats[stat] = STAT_MAX.has(stat) ? Math.max(now, value) : now + value;
+}
+
+// Valor de uma estatística; duas delas vêm de outras partes da conta.
+export function statValue(meta, stat) {
+  if (stat === 'streak') return meta.streak?.days ?? 0;
+  if (stat === 'scenes') return meta.owned.length;
+  return meta.stats?.[stat] ?? 0;
+}
+
+export const TROPHIES = [
+  { id: 'first', name: 'Primeiros passos', text: 'Termine uma partida', stat: 'games', goal: 1, reward: 50 },
+  { id: 'games10', name: 'Freguês', text: 'Termine 10 partidas', stat: 'games', goal: 10, reward: 150 },
+  { id: 'games50', name: 'Da casa', text: 'Termine 50 partidas', stat: 'games', goal: 50, reward: 400 },
+  { id: 'merge100', name: 'Juntador', text: 'Junte bichos 100 vezes', stat: 'merges', goal: 100, reward: 100 },
+  { id: 'merge1000', name: 'Mestre das junções', text: 'Junte bichos 1.000 vezes', stat: 'merges', goal: 1000, reward: 400 },
+  { id: 'scare25', name: 'Guarda do quintal', text: 'Espante 25 intrusos', stat: 'scares', goal: 25, reward: 150 },
+  { id: 'scare100', name: 'Xô, intruso!', text: 'Espante 100 intrusos', stat: 'scares', goal: 100, reward: 400 },
+  { id: 'combo5', name: 'Em cadeia', text: 'Faça um combo x5', stat: 'combo', goal: 5, reward: 150 },
+  { id: 'level8', name: 'Fera', text: 'Consiga o 8º bicho', stat: 'level', goal: 8, reward: 150 },
+  { id: 'level10', name: 'Rei do quintal', text: 'Consiga o 10º bicho', stat: 'level', goal: 10, reward: 300 },
+  { id: 'adopt', name: 'Final feliz', text: 'Junte dois do 10º bicho para a adoção', stat: 'adopts', goal: 1, reward: 500 },
+  { id: 'score10k', name: 'Dez mil', text: 'Faça 10.000 pontos numa partida', stat: 'score', goal: 10000, reward: 150 },
+  { id: 'score25k', name: 'Pontuação de respeito', text: 'Faça 25.000 pontos numa partida', stat: 'score', goal: 25000, reward: 400 },
+  { id: 'streak7', name: 'Semana cheia', text: 'Abra o jogo 7 dias seguidos', stat: 'streak', goal: 7, reward: 300 },
+  { id: 'scenes3', name: 'Viajante', text: 'Tenha 3 cenários', stat: 'scenes', goal: 3, reward: 200 },
+];
+
+// Confere os troféus; os recém-conquistados pagam na hora e são devolvidos.
+export function claimTrophies(meta) {
+  meta.trophies ??= [];
+  const won = TROPHIES.filter((t) => !meta.trophies.includes(t.id) && statValue(meta, t.stat) >= t.goal);
+  for (const t of won) {
+    meta.trophies.push(t.id);
+    meta.coins += t.reward;
+  }
+  return won;
+}
+
 // --- Poderes ---
 export const POWERS = [
   { id: 'shake', name: 'Sacudir', price: 60 },

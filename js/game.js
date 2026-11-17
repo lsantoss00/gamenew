@@ -53,6 +53,20 @@ export function rivalInterval(state) {
   return Math.max(3, 7 - Math.floor(state.drops / 20));
 }
 
+// Sorteio que guarda a semente dentro da partida: com a mesma semente, a
+// sequência de bichos e intrusos é a mesma (usado no desafio do dia).
+export function stateRng(state) {
+  return () => (state.seed = (state.seed * 16807) % 2147483647) / 2147483647;
+}
+
+// Partida com sorteio fixo a partir de uma semente.
+export function createSeededGame(kind, seed) {
+  const holder = { seed: (seed % 2147483646) + 1 };
+  const state = createGame(kind, stateRng(holder));
+  state.seed = holder.seed;
+  return state;
+}
+
 export function createGame(kind = 'cat', rng = Math.random) {
   const state = {
     kind,

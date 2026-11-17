@@ -1,11 +1,11 @@
 import {
-  createGame, drop, step, tick, canDrop, clampAim, dropTime, shake as shakeYard, bodyAt, removeBody, scareAll,
+  createGame, createSeededGame, stateRng, drop, step, tick, canDrop, clampAim, dropTime, shake as shakeYard, bodyAt, removeBody, scareAll,
   W, H, LINE_Y, DROP_Y, DT, RADII, MAX_LEVEL, KINDS, NAMES,
 } from './game.js';
 import { animalSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
 import { paintScene, drawAmbient } from './scene.js';
 import {
-  SCENES, POWERS, powerCost, newMeta, validMeta, coinsForScore, chooseScene,
+  SCENES, POWERS, powerCost, claimDaily, STREAK_CAP, dateSeed, challengeKind, finishChallenge, CHALLENGE_REWARD, newMeta, validMeta, coinsForScore, chooseScene,
   today, dailyMissions, validMissions, missionText, progressMissions,
 } from './meta.js';
 import { burst, dust, poof, confetti, fling, updateFx, drawFx, clearFx } from './fx.js';
@@ -59,6 +59,8 @@ setAudioMode(audioMode);
 const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const save = () => store.set('miau.drop', state);
+// No desafio do dia o sorteio vem da semente guardada na partida; fora dele, é livre.
+const rngOf = () => (state.daily ? stateRng(state) : Math.random);
 
 // --- Desenho ---
 
@@ -384,7 +386,9 @@ function renderMenu() {
   const going = hasGame();
   $('continue').hidden = !going;
   $('continue-info').textContent = going
-    ? `${state.kind === 'cat' ? 'Gatos' : 'Cachorros'} · ${fmt(state.score)} pontos` : '';
+    ? `${state.daily ? 'Desafio do dia · ' : ''}${state.kind === 'cat' ? 'Gatos' : 'Cachorros'} · ${fmt(state.score)} pontos` : '';
+  const days = meta.streak?.last === today() ? meta.streak.days : 0;
+  $('menu-streak').textContent = days > 1 ? ` · ${days} dias seguidos` : '';
   $('play').textContent = going ? 'Nova partida' : 'Jogar';
   $('play').classList.toggle('primary', !going);
   $('play').classList.toggle('big', !going);
@@ -400,6 +404,7 @@ function show(name) {
   if (name === 'menu') {
     save();
     refreshMissions();
+    offerDailyBonus();
     renderMenu();
   } else {
     resize();
@@ -542,6 +547,36 @@ function track(type, value) {
     renderMissionCount();
   }
   if (before !== missions.list.map((m) => m.progress).join()) store.set('miau.missions', missions);
+}
+
+// Fim de uma partida do desafio do dia: guarda o melhor resultado e paga a recompensa da primeira.
+function finishDaily() {
+  const el = $('challenge-result');
+  el.hidden = !state.daily;
+  if (!state.daily) return;
+  if (!state.dailyDone) {
+    state.dailyDone = true;
+    state.dailyReward = finishChallenge(meta, state.daily, state.score);
+    store.set('miau.meta', meta);
+    renderCoins(state.dailyReward > 0);
+  }
+  el.textContent = state.dailyReward
+    ? `Desafio do dia concluído: +${state.dailyReward} moedas`
+    : `Desafio do dia · seu melhor hoje: ${fmt(meta.challenge?.best ?? state.score)}`;
+}
+
+// Bônus por abrir o jogo: aparece uma vez por dia, no menu.
+function offerDailyBonus() {
+  const reward = claimDaily(meta);
+  if (!reward) return;
+  store.set('miau.meta', meta);
+  renderCoins(false);
+  const days = meta.streak.days;
+  $('bonus-text').textContent = days > 1 ? `${days} dias seguidos! Volte amanhã para ganhar mais.` : 'Volte amanhã: o bônus cresce a cada dia seguido.';
+  $('bonus-coins').textContent = `+${fmt(reward)}`;
+  $('bonus-days').innerHTML = Array.from({ length: STREAK_CAP }, (_, i) =>
+    `<li class="${i < days ? 'on' : ''}${i === Math.min(days, STREAK_CAP) - 1 ? ' now' : ''}">${i + 1}</li>`).join('');
+  if (!document.querySelector('dialog[open]')) $('bonus').showModal();
 }
 
 // Paga as moedas da partida, uma vez só. Devolve quanto a partida rendeu.
@@ -732,7 +767,7 @@ function frame(now) {
     acc += elapsed;
     const wasOver = state.over;
     while (acc >= DT) {
-      handle(clockOn() ? tick(state, DT) : step(state, DT));
+      handle(clockOn() ? tick(state, DT, rngOf()) : step(state, DT));
       acc -= DT;
     }
     if (state.warning && state.warning !== announced) { // aviso novo, venha de onde vier
@@ -745,6 +780,7 @@ function frame(now) {
       track('game');
       track('kind', state.kind);
       $('earned').textContent = `+${fmt(payout())}`;
+      finishDaily();
       save();
     }
     setMusicTension(state.danger > 0 && !state.over);
@@ -762,7 +798,7 @@ function frame(now) {
 }
 
 function release() {
-  if (!drop(state, state.aim)) return;
+  if (!drop(state, state.aim, rngOf())) return;
   sfx.drop();
   if (tutorial?.step === 'aim') tip('merge');
   if (learningBasics()) state.next = 1;
@@ -771,14 +807,20 @@ function release() {
   save();
 }
 
-function newGame(kind) {
+function newGame(kind, daily = false) {
   if (!state.over && state.score > 0) { // partida abandonada também rende moedas
     const paid = state.paid;
     const coins = payout();
     if (coins && !paid) toast(`+${fmt(coins)} moedas pela partida`);
   }
   refreshMissions();
-  state = createGame(kind);
+  if (daily) { // desafio do dia: espécie e sorteio definidos pela data
+    const date = today();
+    state = createSeededGame(challengeKind(date), dateSeed(date));
+    state.daily = date;
+  } else {
+    state = createGame(kind);
+  }
   picking = false;
   effects = [];
   clearFx();
@@ -856,10 +898,15 @@ for (const kind of KINDS) {
 }
 $('play').addEventListener('click', () => {
   $('chooser-note').hidden = !hasGame();
+  const c = meta.challenge?.date === today() ? meta.challenge : null;
+  const who = challengeKind(today()) === 'cat' ? 'gatos' : 'cachorros';
+  $('challenge-info').textContent = c
+    ? `Hoje é com ${who}. Seu melhor: ${fmt(c.best)} pontos.`
+    : `Hoje é com ${who}. Vale ${CHALLENGE_REWARD} moedas na primeira partida.`;
   $('chooser').showModal();
 });
 $('continue').addEventListener('click', () => show('game'));
-$('again').addEventListener('click', () => newGame(state.kind));
+$('again').addEventListener('click', () => newGame(state.kind, !!state.daily && state.daily === today()));
 $('to-menu').addEventListener('click', () => show('menu'));
 $('pause').addEventListener('click', pause);
 $('pause-dialog').addEventListener('close', () => { // fecha por botão ou pela tecla Esc
@@ -869,8 +916,15 @@ $('pause-dialog').addEventListener('close', () => { // fecha por botão ou pela 
 $('resume').addEventListener('click', () => $('pause-dialog').close());
 $('restart').addEventListener('click', () => {
   $('pause-dialog').close();
-  newGame(state.kind);
+  newGame(state.kind, !!state.daily && state.daily === today());
 });
+$('challenge').addEventListener('click', () => {
+  $('chooser').close();
+  newGame(null, true);
+  show('game');
+  toast('Desafio do dia');
+});
+$('bonus-close').addEventListener('click', () => $('bonus').close());
 $('quit').addEventListener('click', () => {
   $('pause-dialog').close();
   show('menu');
@@ -925,6 +979,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 refreshMissions();
+if (state.over) finishDaily();
 if (state.over) $('earned').textContent = `+${fmt(payout())}`; // partida terminada antes de existirem moedas
 unlock(Math.max(state.current, state.next, ...state.bodies.map((b) => b.level)), false);
 introTip();

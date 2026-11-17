@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, drop, step, tick, canDrop, dropTime, shake, bodyAt, removeBody, scareAll, W, H, LINE_Y, RADII, MAX_LEVEL, ADOPTION_BONUS, SCARE_BONUS,
+  createGame, createSeededGame, stateRng, drop, step, tick, canDrop, dropTime, shake, bodyAt, removeBody, scareAll, W, H, LINE_Y, RADII, MAX_LEVEL, ADOPTION_BONUS, SCARE_BONUS,
   FIRST_RIVAL, WARNING_TIME, DT,
 } from '../js/game.js';
 
@@ -195,4 +195,26 @@ test('poderes de tirar um bicho e de espantar todos os intrusos', () => {
   assert.equal(removeBody(s, a.id), null);
   assert.deepEqual(scareAll(s).map((b) => b.id), [r1.id, r2.id]);
   assert.equal(s.bodies.length, 0);
+});
+
+test('partidas com a mesma semente sorteiam os mesmos bichos e intrusos', () => {
+  const play = (seed) => {
+    const s = createSeededGame('cat', seed);
+    const rng = stateRng(s);
+    const seen = [];
+    for (let i = 0; i < 30; i++) {
+      seen.push(s.current);
+      s.cooldown = 0;
+      drop(s, 180, rng);
+      if (s.warning) {
+        seen.push(`intruso ${s.warning.level} em ${Math.round(s.warning.x)}`);
+        s.warning = null;
+      }
+    }
+    return seen.join();
+  };
+  assert.equal(play(1234), play(1234));
+  assert.notEqual(play(1234), play(4321));
+  const saved = JSON.parse(JSON.stringify(createSeededGame('dog', 99))); // a semente sobrevive ao salvar
+  assert.ok(Number.isInteger(saved.seed) && saved.seed > 0);
 });
