@@ -894,6 +894,94 @@ function announce(text, seconds = 3.5) {
   announceTimer = setTimeout(() => { if (el.textContent === text) el.hidden = true; }, seconds * 1000);
 }
 
+// --- Compartilhar resultado ---
+// Gera uma imagem 1080x1350 com o quintal do jeito que terminou, os pontos e o maior bicho.
+
+function shareText() {
+  const what = state.mode === 'level' ? `a fase ${state.level}${state.won ? ` com ${state.stars} ${state.stars === 1 ? 'estrela' : 'estrelas'}` : ''}`
+    : `${fmt(state.score)} pontos no modo ${MODE_NAMES[state.mode]}`;
+  return `Fiz ${what} no Miau & Au!`;
+}
+
+function drawShareImage() {
+  const out = document.createElement('canvas');
+  out.width = 1080;
+  out.height = 1350;
+  const c = out.getContext('2d');
+  const k = Math.max(out.width / W, out.height / H);
+  const dy = (out.height - H * k) / 2;
+  c.setTransform(k, 0, 0, k, (out.width - W * k) / 2, dy);
+  paintScene(c, W, H, isDark(), meta.scene);
+  for (const b of state.bodies) { // o quintal como terminou
+    const kind = b.rival ? rivalKind() : b.special === 'wild' ? 'wild' : state.kind;
+    const img = sprite(kind, b.level, b.rival ? 'angry' : 'happy', kind === state.kind ? meta.acc : null);
+    if (!img.complete || !img.naturalWidth) continue;
+    const size = b.r * SPRITE_SCALE;
+    c.save();
+    c.translate(b.x, b.y);
+    c.rotate(b.angle);
+    c.drawImage(img, -size / 2, -size * 0.52, size, size);
+    c.restore();
+  }
+  c.setTransform(1, 0, 0, 1, 0, 0);
+
+  // cartão com o resultado
+  c.fillStyle = 'rgb(255 255 255 / 0.96)';
+  c.beginPath();
+  c.roundRect(60, 60, 960, 420, 48);
+  c.fill();
+  c.textAlign = 'center';
+  c.lineJoin = 'round';
+  c.font = '800 112px "Baloo 2 Local", "Baloo 2", sans-serif';
+  const parts = [['Miau ', '#e8590c'], ['& ', '#55695b'], ['Au', '#2563c9']];
+  const total = parts.reduce((a, [t]) => a + c.measureText(t).width, 0);
+  let x = 540 - total / 2;
+  c.textAlign = 'left';
+  for (const [t, color] of parts) {
+    c.fillStyle = color;
+    c.fillText(t, x, 190);
+    x += c.measureText(t).width;
+  }
+  c.textAlign = 'center';
+  c.fillStyle = '#17261c';
+  c.font = '800 128px "Baloo 2 Local", "Baloo 2", sans-serif';
+  c.fillText(fmt(state.score), 540, 330);
+  c.font = '700 40px "Nunito Local", "Nunito", sans-serif';
+  c.fillStyle = '#55695b';
+  const top = Math.max(0, ...state.bodies.filter((b) => !b.rival && b.special !== 'wild').map((b) => b.level));
+  const line = state.mode === 'level'
+    ? `Fase ${state.level}${state.won ? ` · ${'★'.repeat(state.stars)}${'☆'.repeat(3 - state.stars)}` : ''}`
+    : `pontos · ${MODE_NAMES[state.mode]}`;
+  c.fillText(line, 540, 395);
+  if (top) c.fillText(`Maior bicho: ${NAMES[state.kind][top - 1]}`, 540, 450);
+  return out;
+}
+
+let shareBlob = null;
+async function openShare() {
+  // a janela abre na hora; a imagem aparece assim que fica pronta
+  $('share-img').removeAttribute('src');
+  $('share-send').hidden = true;
+  $('share-help').textContent = 'Preparando a imagem…';
+  $('share-dialog').showModal();
+  await new Promise(requestAnimationFrame);
+  const out = drawShareImage();
+  shareBlob = await new Promise((resolve) => out.toBlob(resolve, 'image/png'));
+  if (!shareBlob) {
+    $('share-help').textContent = 'Não deu para gerar a imagem neste aparelho.';
+    return;
+  }
+  if ($('share-img').dataset.url) URL.revokeObjectURL($('share-img').dataset.url);
+  $('share-img').dataset.url = URL.createObjectURL(shareBlob);
+  $('share-img').src = $('share-img').dataset.url;
+  const file = new File([shareBlob], 'miau-e-au.png', { type: 'image/png' });
+  const canSend = !!navigator.canShare?.({ files: [file] });
+  $('share-send').hidden = !canSend;
+  $('share-help').textContent = canSend
+    ? 'Toque em Enviar para mandar a imagem, ou toque e segure nela para salvar.'
+    : 'Toque e segure a imagem para salvar ou mandar para alguém.';
+}
+
 // Bônus por abrir o jogo: aparece uma vez por dia, no menu.
 function offerDailyBonus() {
   const reward = claimDaily(meta);
@@ -1322,6 +1410,13 @@ for (const btn of document.querySelectorAll('[data-mode]')) {
   });
 }
 $('levels-close').addEventListener('click', () => $('levels').close());
+$('share').addEventListener('click', openShare);
+$('share-close').addEventListener('click', () => $('share-dialog').close());
+$('share-send').addEventListener('click', async () => {
+  try {
+    await navigator.share({ files: [new File([shareBlob], 'miau-e-au.png', { type: 'image/png' })], text: shareText() });
+  } catch { /* cancelado ou recusado: a imagem continua na tela para salvar */ }
+});
 const sameAgain = () => (state.mode === 'daily' && state.daily !== today() ? 'classic' : state.mode);
 // "Jogar de novo": nas fases, vai para a próxima (se venceu) ou repete a mesma.
 function playAgain() {

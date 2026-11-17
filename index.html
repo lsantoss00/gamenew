@@ -66,6 +66,7 @@
           <button class="primary" id="again" type="button">Jogar de novo</button>
           <button id="to-menu" type="button">Menu</button>
         </div>
+        <button class="link" id="share" type="button">Compartilhar resultado</button>
       </div>
     </div>
 
@@ -116,6 +117,16 @@
   </div>
   <p id="levels-total"></p>
   <ol class="level-grid" id="level-grid"></ol>
+</dialog>
+
+<dialog id="share-dialog" aria-labelledby="share-title">
+  <div class="dialog-head">
+    <h2 id="share-title">Seu resultado</h2>
+    <button id="share-close" type="button">Fechar</button>
+  </div>
+  <img id="share-img" alt="Imagem com o resultado da partida">
+  <p class="small" id="share-help">Toque e segure a imagem para salvar ou mandar para alguém.</p>
+  <div class="stack"><button class="primary" id="share-send" type="button" hidden>Enviar</button></div>
 </dialog>
 
 <dialog id="trophies" aria-labelledby="trophies-title">

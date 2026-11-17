@@ -19,6 +19,7 @@ Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quint
 - A partir do 18º bicho, eventos com aviso mudam o quintal por alguns segundos: ventania (empurra a pilha para um lado), chuva (o pelo molhado encolhe os bichos) e tremor (sacode a pilha).
 - Abrir o jogo em dias seguidos rende um bônus que cresce até o 7º dia.
 - O desafio do dia tem a mesma sequência de bichos para todo mundo e paga 150 moedas na primeira partida.
+- No fim da partida, "Compartilhar resultado" gera uma imagem do quintal com os pontos e o maior bicho, para salvar ou mandar.
 - Há 15 troféus com recompensa em moedas e uma tela com os números da conta.
 - Durante a partida, as moedas também pagam poderes: sacudir o quintal, tirar um bicho e espantar todos os intrusos. O preço sobe a cada uso na mesma partida.
 
