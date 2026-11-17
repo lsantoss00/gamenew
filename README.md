@@ -14,6 +14,7 @@ Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quint
 - O álbum guarda todo bicho que você já conseguiu.
 - Cada partida rende moedas (1 a cada 50 pontos), e as 3 missões do dia rendem mais.
 - Na loja, as moedas compram cenários novos: praia, neve, cidade e espaço.
+- A loja também vende acessórios que todos os seus bichos passam a usar: laço, cachecol, óculos escuros, chapéu de festa e coroa.
 - De vez em quando cai um bicho especial: curinga (junta com qualquer um), dourado (rende moedas), barulhento (empurra os vizinhos) e dorminhoco (só junta depois de acordar).
 - A partir do 18º bicho, eventos com aviso mudam o quintal por alguns segundos: ventania (empurra a pilha para um lado), chuva (o pelo molhado encolhe os bichos) e tremor (sacode a pilha).
 - Abrir o jogo em dias seguidos rende um bônus que cresce até o 7º dia.

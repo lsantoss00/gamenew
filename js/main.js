@@ -7,7 +7,7 @@ import { animalSVG, wildSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.
 import { paintScene, drawAmbient } from './scene.js';
 import { LEVEL_COUNT, levelSpec, goalText, goalProgress, levelStars, levelUnlocked, totalStars, finishLevel } from './levels.js';
 import {
-  SCENES, POWERS, powerCost, recordStat, statValue, STAT_NAMES, TROPHIES, claimTrophies, claimDaily, STREAK_CAP, dateSeed, challengeKind, finishChallenge, CHALLENGE_REWARD, newMeta, validMeta, coinsForScore, chooseScene,
+  SCENES, ACCESSORIES, chooseAccessory, POWERS, powerCost, recordStat, statValue, STAT_NAMES, TROPHIES, claimTrophies, claimDaily, STREAK_CAP, dateSeed, challengeKind, finishChallenge, CHALLENGE_REWARD, newMeta, validMeta, coinsForScore, chooseScene,
   today, dailyMissions, validMissions, missionText, progressMissions,
 } from './meta.js';
 import { burst, dust, poof, confetti, fling, updateFx, drawFx, clearFx } from './fx.js';
@@ -93,10 +93,10 @@ const sprites = {}; // 'cat3:happy' -> imagem pronta para o canvas
 const SPRITE_SCALE = ART_BOX / HEAD_R; // o desenho é 3x o raio da cabeça
 const rivalKind = () => (state.kind === 'cat' ? 'dog' : 'cat');
 
-function sprite(kind, level, mood = 'normal') {
-  const key = `${kind}${level}:${mood}`;
+function sprite(kind, level, mood = 'normal', acc = null) {
+  const key = `${kind}${level}:${mood}:${acc}`;
   if (!sprites[key]) {
-    const art = kind === 'wild' ? wildSVG() : animalSVG(kind, level, mood);
+    const art = kind === 'wild' ? wildSVG() : animalSVG(kind, level, mood, acc);
     const svg = art.replace('<svg ', '<svg width="300" height="300" ');
     const img = new Image();
     img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
@@ -113,7 +113,7 @@ function drawAnimal(kind, level, mood, x, y, r, angle = 0, sx = 1, sy = 1, alpha
   ctx.translate(x, y + r * (1 - sy)); // amassa com a base apoiada no chão
   ctx.scale(sx, sy);
   ctx.rotate(angle);
-  const img = sprite(kind, level, mood);
+  const img = sprite(kind, level, mood, kind === state.kind ? meta.acc : null); // só os seus bichos usam acessório
   const size = r * SPRITE_SCALE;
   if (img.complete && img.naturalWidth) {
     ctx.drawImage(img, -size / 2, -size * 0.52, size, size);
@@ -488,10 +488,10 @@ function draw(seconds) {
 
 // --- Placar, avisos e álbum ---
 
-function face(kind, level, special = null) {
+function face(kind, level, special = null, acc = null) {
   if (special === 'wild') return `<div class="face special wild">${wildSVG()}</div>`;
   const mood = special === 'sleepy' ? 'blink' : 'normal';
-  return `<div class="face${special ? ` special ${special}` : ''}" style="background:${tileColor(kind, level)}">${animalSVG(kind, level, mood)}</div>`;
+  return `<div class="face${special ? ` special ${special}` : ''}" style="background:${tileColor(kind, level)}">${animalSVG(kind, level, mood, acc)}</div>`;
 }
 
 function bump(el) { // reinicia a animação de "pulo" do elemento
@@ -522,10 +522,10 @@ function renderHud() {
     $('best').classList.toggle('long', boxValue.length > 8);
     $('best-box').classList.toggle('low', timed && state.timeLeft <= 10);
   }
-  const key = state.kind + state.next + state.nextSpecial;
+  const key = state.kind + state.next + state.nextSpecial + meta.acc;
   if (key !== shownNext) {
     shownNext = key;
-    $('next').innerHTML = face(state.kind, state.next, state.nextSpecial);
+    $('next').innerHTML = face(state.kind, state.next, state.nextSpecial, meta.acc);
     $('next').title = state.nextSpecial ? SPECIAL_NAMES[state.nextSpecial] : '';
     if (state.nextSpecial) toast(SPECIAL_TIPS[state.nextSpecial]);
     bump($('next'));
@@ -600,6 +600,7 @@ function renderMenu() {
   renderCoins(false);
   renderMissionCount();
   renderTrophyCount();
+  renderParade();
 }
 
 function show(name) {
@@ -628,8 +629,13 @@ function drawMenu(seconds) {
 }
 
 // Bichos pulando na frente do cenário do menu.
-$('parade').innerHTML = [['dog', 2, 62, 0.5], ['cat', 5, 84, 0.1], ['dog', 6, 104, 0.8], ['cat', 2, 70, 0.3], ['dog', 4, 86, 1.1], ['cat', 10, 100, 0.6]]
-  .map(([kind, level, size, delay]) => `<div style="--size:${size}px;--delay:${delay}s">${animalSVG(kind, level, 'happy')}</div>`).join('');
+function renderParade() {
+  const acc = meta.acc ?? null;
+  if ($('parade').dataset.acc === String(acc)) return;
+  $('parade').dataset.acc = String(acc);
+  $('parade').innerHTML = [['dog', 2, 62, 0.5], ['cat', 5, 84, 0.1], ['dog', 6, 104, 0.8], ['cat', 2, 70, 0.3], ['dog', 4, 86, 1.1], ['cat', 10, 100, 0.6]]
+    .map(([kind, level, size, delay]) => `<div style="--size:${size}px;--delay:${delay}s">${animalSVG(kind, level, 'happy', acc)}</div>`).join('');
+}
 
 function pause() {
   if (screen !== 'game' || state.over || document.querySelector('dialog[open]')) return;
@@ -905,8 +911,47 @@ function renderMissions() {
   }).join('');
 }
 
+function renderAccessories() {
+  const list = $('acc-list');
+  list.replaceChildren();
+  for (const item of [{ id: null, name: 'Sem acessório', price: 0 }, ...ACCESSORIES]) {
+    const owned = item.id === null || meta.accOwned?.includes(item.id);
+    const using = (meta.acc ?? null) === item.id;
+    const li = document.createElement('li');
+    if (using) li.className = 'using';
+    li.innerHTML = `<div class="preview">${animalSVG(chosenKind(), 3, 'happy', item.id)}</div><span>${item.name}</span>`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    if (using) {
+      btn.textContent = 'Em uso';
+      btn.disabled = true;
+    } else if (owned) {
+      btn.textContent = 'Usar';
+    } else {
+      btn.innerHTML = `${COIN}${fmt(item.price)}`;
+      btn.setAttribute('aria-label', `Comprar ${item.name} por ${item.price} moedas`);
+      btn.disabled = meta.coins < item.price;
+      if (!btn.disabled) btn.className = 'primary';
+    }
+    btn.addEventListener('click', () => {
+      if (!chooseAccessory(meta, item.id)) return;
+      store.set('miau.meta', meta);
+      if (!owned) {
+        sfx.coin();
+        toast(`Acessório novo: ${item.name}`);
+      }
+      renderCoins(!owned);
+      renderShop();
+      renderParade();
+    });
+    li.append(btn);
+    list.append(li);
+  }
+}
+
 function renderShop() {
   $('shop-coins').textContent = fmt(meta.coins);
+  renderAccessories();
   const list = $('shop-list');
   list.replaceChildren();
   for (const scene of SCENES) {

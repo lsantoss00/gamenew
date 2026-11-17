@@ -118,5 +118,20 @@ test('estatísticas somam ou guardam o melhor; troféus pagam uma vez só', () =
   meta.streak = { last: '2026-01-07', days: 7 };
   assert.deepEqual(claimTrophies(meta).map((t) => t.id).sort(), ['scenes3', 'streak7']);
   assert.equal(new Set(TROPHIES.map((t) => t.id)).size, TROPHIES.length);
-  for (const t of TROPHIES) assert.ok(['streak', 'scenes', 'levels', 'stars'].includes(t.stat) || STAT_NAMES[t.stat], t.id);
+  for (const t of TROPHIES) assert.ok(['streak', 'scenes', 'levels', 'stars', 'accs'].includes(t.stat) || STAT_NAMES[t.stat], t.id);
+});
+
+test('acessórios: compra uma vez, troca e tira', async () => {
+  const { ACCESSORIES, chooseAccessory } = await import('../js/meta.js');
+  const meta = newMeta();
+  const [first, second] = ACCESSORIES;
+  assert.equal(chooseAccessory(meta, first.id), false);
+  meta.coins = first.price + second.price;
+  assert.equal(chooseAccessory(meta, first.id), true);
+  assert.equal(chooseAccessory(meta, second.id), true);
+  assert.equal(meta.coins, 0);
+  assert.equal(chooseAccessory(meta, first.id), true); // já tem: não cobra
+  assert.deepEqual([meta.acc, meta.coins], [first.id, 0]);
+  assert.equal(chooseAccessory(meta, null), true);
+  assert.equal(meta.acc, null);
 });

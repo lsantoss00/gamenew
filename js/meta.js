@@ -11,6 +11,32 @@ export const SCENES = [
   { id: 'espaco', name: 'Espaço', price: 5000 },
 ];
 
+export const ACCESSORIES = [
+  { id: 'laco', name: 'Laço', price: 600 },
+  { id: 'cachecol', name: 'Cachecol', price: 900 },
+  { id: 'oculos', name: 'Óculos escuros', price: 1200 },
+  { id: 'chapeu', name: 'Chapéu de festa', price: 1500 },
+  { id: 'coroa', name: 'Coroa', price: 3000 },
+];
+
+// Compra (se ainda não tem) e passa a usar o acessório; null tira o acessório.
+export function chooseAccessory(meta, id) {
+  if (id === null) {
+    meta.acc = null;
+    return true;
+  }
+  const item = ACCESSORIES.find((a) => a.id === id);
+  if (!item) return false;
+  meta.accOwned ??= [];
+  if (!meta.accOwned.includes(id)) {
+    if (meta.coins < item.price) return false;
+    meta.coins -= item.price;
+    meta.accOwned.push(id);
+  }
+  meta.acc = id;
+  return true;
+}
+
 export const newMeta = () => ({ coins: 0, owned: ['quintal'], scene: 'quintal' });
 
 export function validMeta(m) {
@@ -94,6 +120,7 @@ export function recordStat(meta, stat, value = 1) {
 export function statValue(meta, stat) {
   if (stat === 'streak') return meta.streak?.days ?? 0;
   if (stat === 'scenes') return meta.owned.length;
+  if (stat === 'accs') return meta.accOwned?.length ?? 0;
   if (stat === 'levels') return Object.keys(meta.levels ?? {}).length;
   if (stat === 'stars') return Object.values(meta.levels ?? {}).reduce((a, b) => a + b, 0);
   return meta.stats?.[stat] ?? 0;
@@ -115,6 +142,7 @@ export const TROPHIES = [
   { id: 'score25k', name: 'Pontuação de respeito', text: 'Faça 25.000 pontos numa partida', stat: 'score', goal: 25000, reward: 400 },
   { id: 'streak7', name: 'Semana cheia', text: 'Abra o jogo 7 dias seguidos', stat: 'streak', goal: 7, reward: 300 },
   { id: 'scenes3', name: 'Viajante', text: 'Tenha 3 cenários', stat: 'scenes', goal: 3, reward: 200 },
+  { id: 'acc1', name: 'Na moda', text: 'Compre um acessório', stat: 'accs', goal: 1, reward: 100 },
   { id: 'levels10', name: 'Desbravador', text: 'Passe 10 fases', stat: 'levels', goal: 10, reward: 300 },
   { id: 'levels30', name: 'Fim da trilha', text: 'Passe as 30 fases', stat: 'levels', goal: 30, reward: 1000 },
   { id: 'stars60', name: 'Chuva de estrelas', text: 'Junte 60 estrelas nas fases', stat: 'stars', goal: 60, reward: 500 },

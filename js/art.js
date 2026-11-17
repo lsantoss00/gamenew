@@ -170,13 +170,44 @@ function dog(s, mood, id) {
 /**
  * SVG de um bicho. `mood`: 'normal', 'blink', 'happy', 'scared' ou 'angry'.
  */
-export function animalSVG(kind, level, mood = 'normal') {
+// Acessórios, desenhados sobre a cabeça (raio 50, centro em 0,0). A linha dos olhos muda com a espécie.
+function accessory(id, kind, s) {
+  const eyeY = kind === 'cat' ? -3 : -7;
+  const top = s.mane ? -50 : -46;
+  switch (id) {
+    case 'laco':
+      return '<g transform="translate(30 -38) rotate(18)">' +
+        '<path d="M0 0-20-12q-6 12 0 24zM0 0 20-12q6 12 0 24z" fill="#ff5d8f" stroke="#c9306b" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<circle r="6" fill="#ff8fb0" stroke="#c9306b" stroke-width="2.5"/></g>';
+    case 'oculos':
+      return `<g transform="translate(0 ${eyeY})"><path d="M-8 -2h16" stroke="${INK}" stroke-width="3"/>` +
+        '<rect x="-33" y="-10" width="25" height="18" rx="7" fill="#1f2933" stroke="#000" stroke-width="2"/>' +
+        '<rect x="8" y="-10" width="25" height="18" rx="7" fill="#1f2933" stroke="#000" stroke-width="2"/>' +
+        '<path d="M-28-6l7-1M13-6l7-1" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".7"/>' +
+        '<path d="M-33-4-46-8M33-4 46-8" stroke="#000" stroke-width="2.5" stroke-linecap="round"/></g>';
+    case 'cachecol':
+      return '<path d="M-38 34q38 22 76 0l2 13q-40 22-80 0z" fill="#e5484d" stroke="#a5262d" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<path d="M14 44l6 24 12-3-4-22z" fill="#e5484d" stroke="#a5262d" stroke-width="2.5" stroke-linejoin="round"/>' +
+        '<path d="M-26 44v-7M-12 49v-7M2 50v-7M30 40v-7" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".6"/>';
+    case 'chapeu':
+      return `<g transform="translate(0 ${top + 4}) rotate(-8)"><path d="M-15 4 2-24 17 4z" fill="#4dabf7" stroke="#1c6bb0" stroke-width="2.5" stroke-linejoin="round"/>` +
+        '<path d="M-9-4 12-4M-3-14 7-14" stroke="#ffd43b" stroke-width="4" stroke-linecap="round"/>' +
+        '<circle cx="2" cy="-26" r="5" fill="#ff6b6b" stroke="#c92a2a" stroke-width="2"/></g>';
+    case 'coroa':
+      return `<g transform="translate(0 ${top + 2})"><path d="M-22 0v-22l11 10 11-16 11 16 11-10v22z" fill="#ffd43b" stroke="#b97d00" stroke-width="2.5" stroke-linejoin="round"/>` +
+        '<circle cx="0" cy="-8" r="4" fill="#e5484d"/><circle cx="-13" cy="-6" r="3" fill="#4dabf7"/><circle cx="13" cy="-6" r="3" fill="#69db7c"/></g>';
+    default:
+      return '';
+  }
+}
+
+export function animalSVG(kind, level, mood = 'normal', acc = null) {
   const s = (kind === 'cat' ? CATS : DOGS)[level - 1];
   const id = `${kind}${level}`;
   const defs = `<defs><radialGradient id="f${id}" cx=".36" cy=".3" r=".8">` +
     `<stop offset="0" stop-color="${shade(s.fur, 0.22)}"/><stop offset=".6" stop-color="${s.fur}"/><stop offset="1" stop-color="${shade(s.fur, -0.2)}"/>` +
     `</radialGradient><clipPath id="c${id}"><circle r="${HEAD_R - 1.5}"/></clipPath></defs>`;
-  const body = kind === 'cat' ? cat(s, mood, id) : dog(s, mood, id);
+  const body = (kind === 'cat' ? cat(s, mood, id) : dog(s, mood, id)) + (acc ? accessory(acc, kind, s) : '');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-75 -78 150 150" aria-hidden="true">${defs}${body}</svg>`;
 }
 

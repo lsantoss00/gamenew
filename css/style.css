@@ -218,6 +218,10 @@ button.pill { flex: none; min-height: 34px; padding: 6px 12px; border-radius: 99
 .shop button { width: 100%; min-height: 38px; padding: 6px 4px; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px; }
 .shop button:disabled { opacity: 0.55; cursor: default; }
 .shop .coin { width: 16px; height: 16px; }
+.shop.acc .preview { width: 100%; aspect-ratio: 1; border-radius: 12px; border: 3px solid var(--wood); background: var(--lawn); display: grid; place-items: center; }
+.shop.acc .using .preview { border-color: var(--accent); }
+.shop.acc .preview svg { width: 92%; height: 92%; }
+dialog p.small { margin: -4px 0 10px; font-size: 13px; }
 button {
   flex: 1; min-height: 46px; padding: 8px 14px;
   border: 0; border-radius: 14px; cursor: pointer;
