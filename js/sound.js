@@ -57,6 +57,11 @@ export const sfx = {
     tone(420, 260, 0.09, 'square', 0.07);
     tone(460, 280, 0.1, 'square', 0.07, 0.12);
   },
+  weather: (type) => {
+    if (type === 'wind') tone(300, 900, 0.6, 'sawtooth', 0.03);
+    else if (type === 'rain') [0, 1, 2, 3, 4].forEach((i) => tone(1800 - i * 150, 1500 - i * 150, 0.05, 'sine', 0.05, i * 0.08));
+    else tone(90, 50, 0.5, 'triangle', 0.16);
+  },
   coin: () => {
     tone(988, 988, 0.08, 'square', 0.05);
     tone(1319, 1319, 0.22, 'square', 0.05, 0.08);

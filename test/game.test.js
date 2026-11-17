@@ -285,3 +285,62 @@ test('especiais só aparecem depois de alguns bichos e só se a regra estiver li
   assert.ok(count({}) > 20);
   assert.equal(count({ specials: false }), 0);
 });
+
+function startWeather(s, type, dir = 1) {
+  s.drops = s.weatherAt;
+  let rngValue = { wind: 0, rain: 0.4, quake: 0.8 }[type];
+  const events = tick(s, DT, () => rngValue);
+  s.weather.dir = dir;
+  rngValue = 0.5;
+  for (let i = 0; i < 2.1 / DT; i++) events.push(...tick(s, DT, () => 0.5));
+  return events;
+}
+
+test('eventos no quintal: aviso antes, e só com a regra ligada', () => {
+  const s = createGame('cat', Math.random, { clock: false });
+  const events = startWeather(s, 'wind');
+  assert.deepEqual(events.filter((e) => e.type.startsWith('weather')).map((e) => e.type), ['weather-warn', 'weather-start']);
+  const off = createGame('cat', Math.random, { clock: false, events: false });
+  off.drops = off.weatherAt;
+  tick(off, DT);
+  assert.equal(off.weather, null);
+});
+
+test('ventania empurra a pilha para o lado do vento e depois passa', () => {
+  const s = createGame('cat', Math.random, { clock: false, rivals: false });
+  const a = body(s, 4, 150, H - RADII[3]);
+  startWeather(s, 'wind', 1);
+  for (let i = 0; i < 2 / DT; i++) tick(s, DT, () => 0.5);
+  assert.ok(a.x > 200, `deveria ter ido para a direita (x=${a.x})`);
+  const events = [];
+  for (let i = 0; i < 4 / DT; i++) events.push(...tick(s, DT, () => 0.5));
+  assert.ok(events.some((e) => e.type === 'weather-end'));
+  assert.equal(s.weather, null);
+});
+
+test('chuva encolhe os bichos e eles voltam ao tamanho quando seca', () => {
+  const s = createGame('cat', Math.random, { clock: false, rivals: false });
+  const a = body(s, 5, 150, H - RADII[4]);
+  startWeather(s, 'rain');
+  for (let i = 0; i < 3 / DT; i++) tick(s, DT, () => 0.5);
+  assert.ok(a.r < RADII[4] * 0.9, `encolheu pouco (r=${a.r})`);
+  for (let i = 0; i < 10 / DT; i++) tick(s, DT, () => 0.5);
+  assert.equal(s.weather, null);
+  assert.ok(Math.abs(a.r - RADII[4]) < 0.01);
+});
+
+test('tremor sacode a pilha sem contar para a linha', () => {
+  const s = createGame('cat', Math.random, { clock: false, rivals: false });
+  let y = H;
+  for (const level of [10, 9, 8]) { // pilha que passa da linha
+    body(s, level, W / 2, y - RADII[level - 1]);
+    y -= 2 * RADII[level - 1];
+  }
+  s.weather = { type: 'quake', warn: 0, t: 2.4, dir: 1, kick: 0 };
+  const events = [];
+  for (let i = 0; i < 2.3 / DT; i++) events.push(...tick(s, DT, () => 0.5));
+  assert.ok(events.filter((e) => e.type === 'quake-kick').length >= 3);
+  assert.equal(s.over, false, 'durante o tremor a pilha não deveria contar');
+  for (let i = 0; i < 4 / DT; i++) tick(s, DT, () => 0.5);
+  assert.equal(s.over, true, 'depois do tremor a pilha alta volta a contar');
+});

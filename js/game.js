@@ -28,6 +28,18 @@ export const FIRST_SPECIAL = 8; // quantos bichos soltos até poder cair um espe
 const SPECIAL_CHANCE = 0.1;
 const SPECIAL_WEIGHTS = { wild: 0.3, gold: 0.3, bark: 0.2, sleepy: 0.2 };
 const BARK_RADIUS = 120;
+
+// Eventos no quintal, com aviso antes:
+//  - wind: ventania que empurra todo mundo para um lado
+//  - rain: chuva; o pelo molhado encolhe os bichos e eles voltam ao tamanho quando seca
+//  - quake: tremor que sacode a pilha algumas vezes
+export const WEATHERS = ['wind', 'rain', 'quake'];
+export const WEATHER_WARN = 2; // segundos de aviso
+export const FIRST_WEATHER = 18; // quantos bichos soltos até o primeiro evento
+const WEATHER_TIME = { wind: 5, rain: 7, quake: 2.4 };
+const WIND = 650; // empurrão lateral, em unidades/s² (a gravidade é 1800)
+const WET_SHRINK = 0.14; // quanto a chuva encolhe os bichos
+const QUAKE_EVERY = 0.6;
 const BARK_PUSH = 5;
 
 export const NAMES = {
@@ -119,6 +131,9 @@ export function createGame(kind = 'cat', rng = Math.random, rules = {}) {
     combo: 0,
     comboT: 0,
     rivalAt: FIRST_RIVAL,
+    weather: null, // { type, warn, t, dir, kick }
+    weatherAt: FIRST_WEATHER,
+    wet: 0, // 0 = seco, 1 = encharcado
     warning: null, // { x, level, t }: intruso prestes a cair
     danger: 0,
     over: false,
@@ -132,6 +147,9 @@ export function upgradeState(state) {
   state.rules ??= { ...DEFAULT_RULES };
   state.currentSpecial ??= null;
   state.nextSpecial ??= null;
+  state.weather ??= null;
+  state.weatherAt ??= state.drops + FIRST_WEATHER;
+  state.wet ??= 0;
   for (const b of state.bodies) {
     b.special ??= null;
     b.sleep ??= 0;
@@ -201,6 +219,10 @@ export function step(state, dt = DT) {
   if (state.over) return events;
   state.cooldown = Math.max(0, state.cooldown - dt);
   state.comboT = Math.max(0, state.comboT - dt);
+  const weather = state.weather && state.weather.warn <= 0 ? state.weather.type : null;
+  state.wet = Math.min(1, Math.max(0, state.wet + (weather === 'rain' ? dt : -dt / 2)));
+  const size = 1 - WET_SHRINK * state.wet;
+  const wind = weather === 'wind' ? state.weather.dir * WIND * dt * dt : 0;
 
   const bodies = state.bodies;
   const limits = new Map(); // velocidade máxima de cada bicho ao fim do passo
@@ -208,7 +230,7 @@ export function step(state, dt = DT) {
     b.age += dt;
     if (b.sleep > 0) b.sleep = Math.max(0, b.sleep - dt);
     const target = RADII[b.level - 1];
-    b.r = b.age < GROW ? b.r0 + (target - b.r0) * (b.age / GROW) : target;
+    b.r = (b.age < GROW ? b.r0 + (target - b.r0) * (b.age / GROW) : target) * size;
     let vx = (b.x - b.px) * DAMP;
     let vy = (b.y - b.py) * DAMP;
     const speed = Math.hypot(vx, vy);
@@ -218,7 +240,7 @@ export function step(state, dt = DT) {
     }
     b.px = b.x;
     b.py = b.y;
-    b.x += vx;
+    b.x += vx + wind;
     b.y += vy + GRAVITY * dt * dt;
     // rola com o movimento e, como um joão-bobo, volta a ficar de pé quando para
     b.angle += vx / b.r;
@@ -401,12 +423,44 @@ export function scareAll(state) {
 
 /**
  * Física + ritmo da partida: o relógio que solta o bicho sozinho e a queda dos
- * intrusos. Além dos eventos de `step`, devolve { type: 'autodrop' } e
- * { type: 'rival', x }.
+ * intrusos e os eventos no quintal. Além dos eventos de `step`, devolve
+ * { type: 'autodrop' }, { type: 'rival', x }, { type: 'weather-warn' | 'weather-start' |
+ * 'weather-end', weather, dir } e { type: 'quake-kick' }.
  */
 export function tick(state, dt = DT, rng = Math.random) {
   const events = step(state, dt);
   if (state.over) return events;
+
+  if (state.rules.events && !state.weather && state.drops >= state.weatherAt) {
+    const type = WEATHERS[Math.floor(rng() * WEATHERS.length)];
+    state.weather = { type, warn: WEATHER_WARN, t: WEATHER_TIME[type], dir: rng() < 0.5 ? -1 : 1, kick: 0 };
+    events.push({ type: 'weather-warn', weather: type, dir: state.weather.dir });
+  } else if (state.weather) {
+    const w = state.weather;
+    if (w.warn > 0) {
+      w.warn -= dt;
+      if (w.warn <= 0) events.push({ type: 'weather-start', weather: w.type, dir: w.dir });
+    } else {
+      w.t -= dt;
+      if (w.type === 'quake') {
+        w.kick -= dt;
+        if (w.kick <= 0) {
+          w.kick = QUAKE_EVERY;
+          for (const b of state.bodies) {
+            b.px = b.x + (rng() - 0.5) * 3;
+            b.py = b.y + 1.2 + rng() * 0.8;
+            b.age = Math.min(b.age, SETTLE - QUAKE_EVERY); // não conta para a linha enquanto treme
+          }
+          events.push({ type: 'quake-kick' });
+        }
+      }
+      if (w.t <= 0) {
+        state.weather = null;
+        state.weatherAt = state.drops + 16 + Math.floor(rng() * 10);
+        events.push({ type: 'weather-end', weather: w.type });
+      }
+    }
+  }
 
   if (state.warning) {
     state.warning.t -= dt;

@@ -163,6 +163,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
   animation: appear 160ms ease-out;
 }
 
+.weather {
+  position: absolute; left: 50%; top: 21%; z-index: 3; transform: translateX(-50%); margin: 0; pointer-events: none;
+  max-width: calc(100% - 24px); padding: 7px 14px; border-radius: 99px; background: #e5484d; color: #fff;
+  font-weight: 800; text-align: center; white-space: nowrap; animation: appear 160ms ease-out;
+}
+.weather.on { background: #1f3b6b; }
+
 .overlay {
   position: absolute; inset: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 82%, transparent);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center;
@@ -266,6 +273,6 @@ dialog h3.d { color: var(--dog); }
 .album .q { font: 800 22px/1 var(--display); color: var(--muted); }
 
 @media (prefers-reduced-motion: reduce) {
-  .toast, .coach, .bump, .overlay > *, .screen, .hero h1, .parade div { animation: none; }
+  .toast, .coach, .weather, .bump, .overlay > *, .screen, .hero h1, .parade div { animation: none; }
   button { transition: none; }
 }

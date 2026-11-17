@@ -166,7 +166,79 @@ const SPECIAL_TIPS = {
   bark: 'Vem aí um barulhento: ao cair, ele empurra os vizinhos.',
   sleepy: 'Vem aí um dorminhoco: ele só junta depois de acordar.',
 };
-const GOLD_COINS = 15; // moedas por juntar um bicho dourado
+const GOLD_COINS = 15;
+
+// --- Eventos no quintal ---
+
+const WEATHER_TEXT = {
+  wind: (dir) => `Ventania vindo da ${dir > 0 ? 'esquerda' : 'direita'}!`,
+  rain: () => 'Vai chover: o pelo molhado encolhe!',
+  quake: () => 'Tremor chegando: segura a pilha!',
+};
+const WEATHER_ON = { wind: 'Ventania!', rain: 'Chuva!', quake: 'Tremor!' };
+
+function weatherEvent(e) {
+  if (e.type === 'weather-warn') {
+    sfx.warning();
+  } else if (e.type === 'weather-start') {
+    sfx.weather(e.weather);
+  } else if (e.type === 'quake-kick') {
+    shake = Math.max(shake, 0.3);
+    sfx.thud(1, 9);
+  }
+}
+
+// A faixa de aviso segue o estado da partida (vale também ao continuar uma partida salva).
+let shownWeather = '';
+function renderWeather() {
+  const w = state.over ? null : state.weather;
+  const key = w ? `${w.type}${w.dir}${w.warn > 0}` : '';
+  if (key === shownWeather) return;
+  shownWeather = key;
+  const el = $('weather');
+  el.hidden = !w;
+  if (!w) return;
+  el.textContent = w.warn > 0 ? WEATHER_TEXT[w.type](w.dir) : WEATHER_ON[w.type];
+  el.classList.toggle('on', w.warn <= 0);
+}
+
+// Efeitos de tela de cada evento, desenhados sobre o quintal.
+function drawWeather(seconds) {
+  const w = state.weather && state.weather.warn <= 0 ? state.weather : null;
+  if (state.wet > 0) { // céu fechando e chuva caindo
+    ctx.fillStyle = `rgb(30 50 90 / ${0.18 * state.wet})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (w?.type === 'rain' || (state.wet > 0 && !w)) {
+    const k = w ? 1 : state.wet;
+    ctx.strokeStyle = `rgb(200 225 255 / ${0.7 * k})`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (let i = 0; i < 70; i++) {
+      const x = (i * 53.7 + (calm.matches ? 0 : seconds * 40)) % W;
+      const y = (i * 97.3 + (calm.matches ? 0 : seconds * 620)) % H;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 4, y + 14);
+    }
+    ctx.stroke();
+  }
+  if (w?.type === 'wind') { // rajadas cruzando a tela
+    ctx.strokeStyle = 'rgb(255 255 255 / 0.7)';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i < 14; i++) {
+      const len = 30 + (i % 4) * 14;
+      const travel = ((i * 71.3 + (calm.matches ? 0 : seconds * 420)) % (W + 120)) - 60;
+      const x = w.dir > 0 ? travel : W - travel;
+      const y = 30 + ((i * 131.7) % (H - 60));
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - w.dir * len, y);
+    }
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
+} // moedas por juntar um bicho dourado
 
 // Enfeites dos especiais, desenhados por cima do bicho (sem girar junto).
 function decorate(special, x, y, r, seconds, sleep = 0) {
@@ -310,6 +382,7 @@ function draw(seconds) {
   ctx.setLineDash([]);
 
   for (const b of state.bodies) drawBody(b, seconds);
+  drawWeather(seconds);
 
   if (state.warning) { // o intruso espia por cima e uma seta mostra onde ele vai cair
     const { x, t, level } = state.warning;
@@ -835,6 +908,10 @@ function handle(events) {
       burst(e.x, e.y, { n: 14, speed: 220, size: 6, colors: ['#ffd43b', '#f5b301', '#fff'] });
       sfx.coin();
     }
+    if (e.type.startsWith('weather') || e.type === 'quake-kick') {
+      weatherEvent(e);
+      continue;
+    }
     if (e.type === 'bark') {
       ring(e.x, e.y, e.r * 3);
       floatText(e.x, e.y - e.r, state.kind === 'cat' ? 'Miau!' : 'Au!', 24, '#fff');
@@ -925,6 +1002,7 @@ function frame(now) {
     updateFx(elapsed);
     renderHud();
     renderPowers();
+    renderWeather();
     draw(now / 1000);
   }
   requestAnimationFrame(frame);
