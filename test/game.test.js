@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, drop, step, tick, canDrop, dropTime, W, H, LINE_Y, RADII, MAX_LEVEL, ADOPTION_BONUS, SCARE_BONUS,
+  createGame, drop, step, tick, canDrop, dropTime, shake, bodyAt, removeBody, scareAll, W, H, LINE_Y, RADII, MAX_LEVEL, ADOPTION_BONUS, SCARE_BONUS,
   FIRST_RIVAL, WARNING_TIME, DT,
 } from '../js/game.js';
 
@@ -168,4 +168,31 @@ test('depois de alguns bichos cai um intruso, com aviso antes', () => {
   assert.equal(events.filter((e) => e.type === 'rival').length, 1);
   assert.equal(s.bodies.filter((b) => b.rival).length, 1);
   assert.equal(s.warning, null);
+});
+
+test('poder de sacudir: a pilha pula, não conta para a linha no ar e volta a assentar', () => {
+  const s = createGame();
+  const a = body(s, 5, 100, H - RADII[4]);
+  const b = body(s, 3, 250, H - RADII[2]);
+  assert.equal(shake(s), true);
+  run(s, 0.15);
+  assert.ok(a.y < H - RADII[4] - 5 && b.y < H - RADII[2] - 5, 'os bichos deveriam ter pulado');
+  run(s, 3);
+  assert.equal(s.over, false);
+  assert.ok(Math.abs(a.y - (H - a.r)) < 0.5 && Math.abs(b.y - (H - b.r)) < 0.5);
+  assert.equal(shake(createGame()), false); // nada para sacudir
+});
+
+test('poderes de tirar um bicho e de espantar todos os intrusos', () => {
+  const s = createGame();
+  const a = body(s, 4, 100, 400);
+  const r1 = body(s, 2, 200, 400);
+  const r2 = body(s, 1, 300, 400);
+  r1.rival = r2.rival = true;
+  assert.equal(bodyAt(s, 105, 395), a);
+  assert.equal(bodyAt(s, 100, 100), null);
+  assert.equal(removeBody(s, a.id), a);
+  assert.equal(removeBody(s, a.id), null);
+  assert.deepEqual(scareAll(s).map((b) => b.id), [r1.id, r2.id]);
+  assert.equal(s.bodies.length, 0);
 });

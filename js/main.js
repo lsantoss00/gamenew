@@ -1,11 +1,11 @@
 import {
-  createGame, drop, step, tick, canDrop, clampAim, dropTime,
+  createGame, drop, step, tick, canDrop, clampAim, dropTime, shake as shakeYard, bodyAt, removeBody, scareAll,
   W, H, LINE_Y, DROP_Y, DT, RADII, MAX_LEVEL, KINDS, NAMES,
 } from './game.js';
 import { animalSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
 import { paintScene, drawAmbient } from './scene.js';
 import {
-  SCENES, newMeta, validMeta, coinsForScore, chooseScene,
+  SCENES, POWERS, powerCost, newMeta, validMeta, coinsForScore, chooseScene,
   today, dailyMissions, validMissions, missionText, progressMissions,
 } from './meta.js';
 import { burst, dust, poof, confetti, fling, updateFx, drawFx, clearFx } from './fx.js';
@@ -431,7 +431,86 @@ const COIN = '<svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle c
 
 function renderCoins(animate = true) {
   $('coins').textContent = fmt(meta.coins);
-  if (animate) bump($('coins-chip'));
+  $('game-coins').textContent = fmt(meta.coins);
+  if (animate) bump(screen === 'menu' ? $('coins-chip') : $('game-coins').parentElement);
+}
+
+function spend(amount) {
+  if (meta.coins < amount) return false;
+  meta.coins -= amount;
+  store.set('miau.meta', meta);
+  renderCoins();
+  return true;
+}
+
+// --- Poderes ---
+
+let picking = false; // "Tirar" armado: o próximo toque escolhe um bicho
+const used = (id) => state.used?.[id] ?? 0;
+const costOf = (id) => powerCost(id, used(id));
+
+function powerAvailable(id) {
+  if (state.over || meta.coins < costOf(id)) return false;
+  if (id === 'shoo') return state.bodies.some((b) => b.rival);
+  return state.bodies.length > 0;
+}
+
+function charge(id) {
+  if (!spend(costOf(id))) return false;
+  state.used = { ...state.used, [id]: used(id) + 1 };
+  save();
+  return true;
+}
+
+function flingBody(b) {
+  const kind = b.rival ? rivalKind() : state.kind;
+  poof(b.x, b.y, b.r);
+  fling(sprite(kind, b.level, b.rival ? 'scared' : 'happy'), b.x, b.y, b.r, b.r * SPRITE_SCALE);
+}
+
+function usePower(id) {
+  wake();
+  if (id === 'pick') { // só arma; a cobrança é quando o bicho for escolhido
+    picking = !picking && powerAvailable('pick');
+    if (picking) toast('Toque no bicho que você quer tirar');
+    return;
+  }
+  picking = false;
+  if (!powerAvailable(id) || !charge(id)) return;
+  if (id === 'shake') {
+    shakeYard(state);
+    shake = 0.35;
+    sfx.shake();
+  } else {
+    for (const b of scareAll(state)) flingBody(b);
+    sfx.scare();
+  }
+  save();
+}
+
+// Com "Tirar" armado, o toque no quintal escolhe o bicho em vez de soltar um.
+function pickAt(x, y) {
+  picking = false;
+  const body = bodyAt(state, x, y);
+  if (!body || !charge('pick')) return;
+  removeBody(state, body.id);
+  flingBody(body);
+  sfx.scare();
+  save();
+}
+
+let shownPowers = '';
+function renderPowers() {
+  const key = POWERS.map((p) => `${costOf(p.id)}${powerAvailable(p.id)}`).join() + picking;
+  if (key === shownPowers) return;
+  shownPowers = key;
+  for (const p of POWERS) {
+    const btn = document.querySelector(`[data-power="${p.id}"]`);
+    btn.disabled = !powerAvailable(p.id);
+    btn.classList.toggle('armed', p.id === 'pick' && picking);
+    btn.querySelector('b').textContent = fmt(costOf(p.id));
+    btn.setAttribute('aria-label', `${p.name}: ${costOf(p.id)} moedas`);
+  }
 }
 
 function earn(amount) {
@@ -676,6 +755,7 @@ function frame(now) {
     trackImpacts(elapsed);
     updateFx(elapsed);
     renderHud();
+    renderPowers();
     draw(now / 1000);
   }
   requestAnimationFrame(frame);
@@ -699,6 +779,7 @@ function newGame(kind) {
   }
   refreshMissions();
   state = createGame(kind);
+  picking = false;
   effects = [];
   clearFx();
   looks.clear();
@@ -732,9 +813,17 @@ canvas.addEventListener('pointermove', (e) => {
 canvas.addEventListener('pointerup', (e) => {
   if (!aiming) return;
   aiming = false;
+  if (picking) {
+    const rect = canvas.getBoundingClientRect();
+    pickAt(((e.clientX - rect.left) / rect.width) * W, ((e.clientY - rect.top) / rect.height) * H);
+    return;
+  }
   toAim(e);
   release();
 });
+for (const p of POWERS) {
+  document.querySelector(`[data-power="${p.id}"]`).addEventListener('click', () => usePower(p.id));
+}
 canvas.addEventListener('pointercancel', () => { aiming = false; });
 
 window.addEventListener('keydown', (e) => {

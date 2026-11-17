@@ -12,6 +12,7 @@ Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quint
 - O álbum guarda todo bicho que você já conseguiu.
 - Cada partida rende moedas (1 a cada 50 pontos), e as 3 missões do dia rendem mais.
 - Na loja, as moedas compram cenários novos: praia e neve.
+- Durante a partida, as moedas também pagam poderes: sacudir o quintal, tirar um bicho e espantar todos os intrusos. O preço sobe a cada uso na mesma partida.
 
 ## Rodar
 

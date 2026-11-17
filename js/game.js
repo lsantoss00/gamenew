@@ -248,6 +248,52 @@ export function step(state, dt = DT) {
   return events;
 }
 
+// --- Poderes (comprados com moedas, usados durante a partida) ---
+
+// Sacode o quintal: todo mundo pula e se reacomoda, o que costuma render junções.
+export function shake(state, rng = Math.random) {
+  if (state.over || state.bodies.length === 0) return false;
+  for (const b of state.bodies) {
+    b.r0 = RADII[b.level - 1];
+    b.age = 0; // tempo para assentar de novo antes de contar para a linha
+    b.px = b.x + (rng() - 0.5) * 5;
+    b.py = b.y + 2.2 + rng() * 1.4;
+  }
+  state.danger = 0;
+  return true;
+}
+
+// O bicho (ou intruso) que está sob o ponto tocado.
+export function bodyAt(state, x, y) {
+  let found = null;
+  let nearest = Infinity;
+  for (const b of state.bodies) {
+    const d = Math.hypot(b.x - x, b.y - y);
+    if (d <= b.r + 6 && d < nearest) {
+      found = b;
+      nearest = d;
+    }
+  }
+  return found;
+}
+
+// Tira um bicho do quintal. Devolve o bicho tirado, ou null.
+export function removeBody(state, id) {
+  if (state.over) return null;
+  const body = state.bodies.find((b) => b.id === id);
+  if (!body) return null;
+  state.bodies = state.bodies.filter((b) => b !== body);
+  return body;
+}
+
+// Espanta todos os intrusos de uma vez. Devolve os que saíram.
+export function scareAll(state) {
+  if (state.over) return [];
+  const rivals = state.bodies.filter((b) => b.rival);
+  state.bodies = state.bodies.filter((b) => !b.rival);
+  return rivals;
+}
+
 /**
  * Física + ritmo da partida: o relógio que solta o bicho sozinho e a queda dos
  * intrusos. Além dos eventos de `step`, devolve { type: 'autodrop' } e

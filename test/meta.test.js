@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SCENES, newMeta, validMeta, coinsForScore, chooseScene,
+  SCENES, POWERS, powerCost, newMeta, validMeta, coinsForScore, chooseScene,
   today, dailyMissions, validMissions, missionText, progressMissions,
 } from '../js/meta.js';
 
@@ -67,4 +67,9 @@ test('missões que somam, que guardam o melhor valor e a de espécie', () => {
   assert.deepEqual(progressMissions(missions, 'combo', 5).map((m) => m.progress), [3]);
   assert.deepEqual(progressMissions(missions, 'kind', 'dog').length, 1);
   assert.ok(missions.list.every((m) => m.done));
+});
+
+test('poderes ficam mais caros a cada uso na mesma partida', () => {
+  const { id, price } = POWERS[0];
+  assert.deepEqual([0, 1, 2].map((used) => powerCost(id, used)), [price, price * 2, price * 3]);
 });

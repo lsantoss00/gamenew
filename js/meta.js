@@ -31,6 +31,18 @@ export function chooseScene(meta, id) {
   return true;
 }
 
+// --- Poderes ---
+export const POWERS = [
+  { id: 'shake', name: 'Sacudir', price: 60 },
+  { id: 'pick', name: 'Tirar', price: 100 },
+  { id: 'shoo', name: 'Xô', price: 80 },
+];
+
+// O preço sobe a cada uso na mesma partida: 1x, 2x, 3x...
+export function powerCost(id, used = 0) {
+  return POWERS.find((p) => p.id === id).price * (1 + used);
+}
+
 // --- Missões diárias ---
 // Tipos que somam a cada acontecimento, e tipos que guardam o melhor valor atingido.
 const MAX_TYPES = new Set(['combo', 'reach', 'score']);
