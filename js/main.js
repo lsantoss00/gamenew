@@ -5,7 +5,8 @@ import {
 } from './game.js';
 import { animalSVG, wildSVG, tileColor, furColor, ART_BOX, HEAD_R } from './art.js';
 import { paintScene, drawAmbient } from './scene.js';
-import { FACTS, see, timesSeen } from './album.js';
+import { _, fmt, animalName, setLang, detectLang, translateDom, LANGS, getLang } from './i18n.js';
+import { factOf, see, timesSeen } from './album.js';
 import { LEVEL_COUNT, levelSpec, goalText, goalProgress, levelStars, levelUnlocked, totalStars, finishLevel } from './levels.js';
 import {
   SCENES, ACCESSORIES, chooseAccessory, POWERS, powerCost, recordStat, statValue, STAT_NAMES, TROPHIES, claimTrophies, claimDaily, STREAK_CAP, dateSeed, challengeKind, finishChallenge, CHALLENGE_REWARD, newMeta, validMeta, coinsForScore, chooseScene,
@@ -15,7 +16,6 @@ import { burst, dust, poof, confetti, fling, updateFx, drawFx, clearFx } from '.
 import { sfx, setVolumes, unlockAudio, startMusic, stopMusic, setMusicTension } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
-const fmt = (n) => n.toLocaleString('pt-BR');
 
 // O armazenamento pode falhar (aba anônima, bloqueio): o jogo segue sem salvar.
 const store = {
@@ -58,12 +58,17 @@ let paused = false;
 const OLD_AUDIO = { all: [0.7, 1], sfx: [0, 1], off: [0, 0] }[store.get('miau.audio', 'all')] ?? [0.7, 1];
 const settings = { music: OLD_AUDIO[0], sfx: OLD_AUDIO[1], vibrate: true, ...store.get('miau.settings', {}) };
 setVolumes(settings.music, settings.sfx);
+setLang(detectLang(settings.lang));
+document.documentElement.lang = { pt: 'pt-BR', en: 'en', es: 'es' }[getLang()];
+translateDom(document.body);
 const buzz = (ms) => settings.vibrate && navigator.vibrate?.(ms);
 const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const save = () => store.set('miau.drop', state);
 
 const MODE_NAMES = { classic: 'Clássico', zen: 'Zen', time: 'Contra o tempo', daily: 'Desafio do dia', level: 'Fase' };
+const modeName = (mode) => _(MODE_NAMES[mode]);
+const speciesName = (kind) => (kind === 'cat' ? _('Gatos') : _('Cachorros'));
 // Recorde de cada modo (o do clássico é o recorde que já existia).
 function bestOf(mode) {
   if (mode === 'classic') return best;
@@ -184,21 +189,21 @@ function trackImpacts(elapsed) {
 
 // O que aparece quando um especial entra na fila.
 const SPECIAL_TIPS = {
-  wild: 'Vem aí um curinga: ele junta com qualquer bicho!',
-  gold: 'Vem aí um dourado: juntá-lo rende moedas.',
-  bark: 'Vem aí um barulhento: ao cair, ele empurra os vizinhos.',
-  sleepy: 'Vem aí um dorminhoco: ele só junta depois de acordar.',
+  wild: () => _('Vem aí um curinga: ele junta com qualquer bicho!'),
+  gold: () => _('Vem aí um dourado: juntá-lo rende moedas.'),
+  bark: () => _('Vem aí um barulhento: ao cair, ele empurra os vizinhos.'),
+  sleepy: () => _('Vem aí um dorminhoco: ele só junta depois de acordar.'),
 };
 const GOLD_COINS = 15;
 
 // --- Eventos no quintal ---
 
 const WEATHER_TEXT = {
-  wind: (dir) => `Ventania vindo da ${dir > 0 ? 'esquerda' : 'direita'}!`,
-  rain: () => 'Vai chover: o pelo molhado encolhe!',
-  quake: () => 'Tremor chegando: segura a pilha!',
+  wind: (dir) => (dir > 0 ? _('Ventania vindo da esquerda!') : _('Ventania vindo da direita!')),
+  rain: () => _('Vai chover: o pelo molhado encolhe!'),
+  quake: () => _('Tremor chegando: segura a pilha!'),
 };
-const WEATHER_ON = { wind: 'Ventania!', rain: 'Chuva!', quake: 'Tremor!' };
+const WEATHER_ON = { wind: () => _('Ventania!'), rain: () => _('Chuva!'), quake: () => _('Tremor!') };
 
 function weatherEvent(e) {
   if (e.type === 'weather-warn') {
@@ -221,7 +226,7 @@ function renderWeather() {
   const el = $('weather');
   el.hidden = !w;
   if (!w) return;
-  el.textContent = w.warn > 0 ? WEATHER_TEXT[w.type](w.dir) : WEATHER_ON[w.type];
+  el.textContent = w.warn > 0 ? WEATHER_TEXT[w.type](w.dir) : WEATHER_ON[w.type]();
   el.classList.toggle('on', w.warn <= 0);
 }
 
@@ -408,7 +413,7 @@ function draw(seconds) {
   drawWeather(seconds);
   if (state.goal && !state.over) { // quantos bichos ainda dá para soltar nesta fase
     const left = Math.max(0, state.dropLimit - state.drops);
-    const text = `${left} ${left === 1 ? 'bicho' : 'bichos'}`;
+    const text = left === 1 ? _('{n} bicho', { n: left }) : _('{n} bichos', { n: left });
     ctx.font = '800 14px "Baloo 2 Local", "Baloo 2", sans-serif';
     const w = ctx.measureText(text).width + 20;
     ctx.fillStyle = left <= 3 ? 'rgb(229 72 77 / 0.92)' : 'rgb(23 38 28 / 0.62)';
@@ -518,7 +523,7 @@ function renderHud() {
   const boxValue = state.goal ? goalProgress(state.goal, state.kind) : timed ? clockText(state.timeLeft) : fmt(bestOf(state.mode));
   if (shownBest !== boxValue) {
     shownBest = boxValue;
-    $('best-label').textContent = state.goal ? 'Objetivo' : timed ? 'Tempo' : 'Recorde';
+    $('best-label').textContent = state.goal ? _('Objetivo') : timed ? _('Tempo') : _('Recorde');
     $('best').textContent = boxValue;
     $('best').classList.toggle('long', boxValue.length > 8);
     $('best-box').classList.toggle('low', timed && state.timeLeft <= 10);
@@ -527,8 +532,8 @@ function renderHud() {
   if (key !== shownNext) {
     shownNext = key;
     $('next').innerHTML = face(state.kind, state.next, state.nextSpecial, meta.acc);
-    $('next').title = state.nextSpecial ? SPECIAL_NAMES[state.nextSpecial] : '';
-    if (state.nextSpecial) toast(SPECIAL_TIPS[state.nextSpecial]);
+    $('next').title = state.nextSpecial ? _(SPECIAL_NAMES[state.nextSpecial]) : '';
+    if (state.nextSpecial) toast(SPECIAL_TIPS[state.nextSpecial]());
     bump($('next'));
   }
   if (state.over && $('over').hidden) {
@@ -550,14 +555,15 @@ function unlock(level, announce) {
   if (level <= album[state.kind]) return;
   album[state.kind] = level;
   store.set('miau.album', album);
-  if (announce) toast(`Novo no álbum: ${NAMES[state.kind][level - 1]}`);
+  if (announce) toast(_('Novo no álbum: {name}', { name: animalName(state.kind, level) }));
 }
 
 function renderAlbum() {
   $('album-card').hidden = true;
   $('album-hint').hidden = false;
   for (const kind of KINDS) {
-    $(`album-${kind}`).innerHTML = NAMES[kind].map((name, i) => {
+    $(`album-${kind}`).innerHTML = NAMES[kind].map((_name, i) => {
+      const name = animalName(kind, i + 1);
       const got = i + 1 <= album[kind];
       return `<li class="${got ? '' : 'locked'}">` + (got
         ? `<button type="button" data-card="${kind}:${i + 1}" aria-pressed="false">${face(kind, i + 1)}<span>${name}</span></button>`
@@ -569,11 +575,12 @@ function renderAlbum() {
 // Ficha de um bicho: desenho, nível, quantas vezes apareceu e uma curiosidade.
 function showCard(kind, level) {
   $('card-face').innerHTML = face(kind, level, null, meta.acc);
-  $('card-name').textContent = NAMES[kind][level - 1];
+  $('card-name').textContent = animalName(kind, level);
   const n = timesSeen(meta, kind, level);
-  $('card-meta').textContent = `${kind === 'cat' ? 'Gato' : 'Cachorro'} · nível ${level} de ${MAX_LEVEL} · ` +
-    (n ? `apareceu ${fmt(n)} ${n === 1 ? 'vez' : 'vezes'} no seu quintal` : 'apareceu antes da contagem começar');
-  $('card-fact').textContent = FACTS[kind][level - 1];
+  const seen = n === 1 ? _('apareceu 1 vez no seu quintal')
+    : n ? _('apareceu {n} vezes no seu quintal', { n: fmt(n) }) : _('apareceu antes da contagem começar');
+  $('card-meta').textContent = `${kind === 'cat' ? _('Gato') : _('Cachorro')} · ${_('nível {n} de {max}', { n: level, max: MAX_LEVEL })} · ${seen}`;
+  $('card-fact').textContent = factOf(kind, level);
   $('album-card').hidden = false;
   $('album-hint').hidden = true;
   for (const btn of document.querySelectorAll('[data-card]')) btn.setAttribute('aria-pressed', String(btn.dataset.card === `${kind}:${level}`));
@@ -592,28 +599,27 @@ const hasGame = () => !state.over && state.drops > 0;
 function renderOver() {
   const level = state.mode === 'level';
   const won = level && state.won;
-  $('over-title').textContent = won ? `Fase ${state.level} concluída!`
-    : level ? 'Não foi dessa vez'
-      : state.overReason === 'time' ? 'Tempo esgotado!' : 'Lotou!';
+  $('over-title').textContent = won ? _('Fase {n} concluída!', { n: state.level })
+    : level ? _('Não foi dessa vez')
+      : state.overReason === 'time' ? _('Tempo esgotado!') : _('Lotou!');
   $('over-stars').hidden = !won;
   $('over-stars').innerHTML = [1, 2, 3].map((i) => `<span class="${i <= state.stars ? '' : 'off'}">★</span>`).join('');
   $('over-text').innerHTML = level && !won
-    ? (state.overReason === 'drops' ? 'Acabaram os bichos antes do objetivo.' : 'O quintal lotou antes do objetivo.')
-    : `Você fez <b id="final">${fmt(state.score)}</b> pontos.`;
-  $('again').textContent = won ? (state.level < LEVEL_COUNT ? 'Próxima fase' : 'Ver fases') : level ? 'Tentar de novo' : 'Jogar de novo';
+    ? (state.overReason === 'drops' ? _('Acabaram os bichos antes do objetivo.') : _('O quintal lotou antes do objetivo.'))
+    : _('Você fez {n} pontos.', { n: `<b id="final">${fmt(state.score)}</b>` });
+  $('again').textContent = won ? (state.level < LEVEL_COUNT ? _('Próxima fase') : _('Ver fases')) : level ? _('Tentar de novo') : _('Jogar de novo');
 }
 
 function renderMenu() {
   const going = hasGame();
   $('continue').hidden = !going;
   $('continue-info').textContent = going
-    ? `${MODE_NAMES[state.mode]}${state.level ? ` ${state.level}` : ''} · ${state.kind === 'cat' ? 'Gatos' : 'Cachorros'} · ${fmt(state.score)} pontos` : '';
+    ? `${modeName(state.mode)}${state.level ? ` ${state.level}` : ''} · ${speciesName(state.kind)} · ${_('{n} pontos', { n: fmt(state.score) })}` : '';
   const days = meta.streak?.last === today() ? meta.streak.days : 0;
-  $('menu-streak').textContent = days > 1 ? ` · ${days} dias seguidos` : '';
-  $('play').textContent = going ? 'Nova partida' : 'Jogar';
+  $('play').textContent = going ? _('Nova partida') : _('Jogar');
   $('play').classList.toggle('primary', !going);
   $('play').classList.toggle('big', !going);
-  $('menu-best').textContent = fmt(best);
+  $('menu-record').innerHTML = _('Recorde: {n} pontos', { n: `<b>${fmt(best)}</b>` }) + (days > 1 ? ` · ${_('{n} dias seguidos', { n: days })}` : '');
   renderCoins(false);
   renderMissionCount();
   renderTrophyCount();
@@ -708,7 +714,7 @@ function usePower(id) {
   wake();
   if (id === 'pick') { // só arma; a cobrança é quando o bicho for escolhido
     picking = !picking && powerAvailable('pick');
-    if (picking) toast('Toque no bicho que você quer tirar');
+    if (picking) toast(_('Toque no bicho que você quer tirar'));
     return;
   }
   picking = false;
@@ -745,7 +751,7 @@ function renderPowers() {
     btn.disabled = !powerAvailable(p.id);
     btn.classList.toggle('armed', p.id === 'pick' && picking);
     btn.querySelector('b').textContent = fmt(costOf(p.id));
-    btn.setAttribute('aria-label', `${p.name}: ${costOf(p.id)} moedas`);
+    btn.setAttribute('aria-label', _('{name}: {n} moedas', { name: _(p.name), n: costOf(p.id) }));
   }
 }
 
@@ -770,7 +776,7 @@ function checkTrophies() {
   store.set('miau.meta', meta);
   renderCoins();
   renderTrophyCount();
-  toast(`Troféu: ${won[0].name}! +${won.reduce((a, t) => a + t.reward, 0)} moedas`);
+  toast(_('Troféu: {name}! +{n} moedas', { name: _(won[0].name), n: won.reduce((a, t) => a + t.reward, 0) }));
   sfx.coin();
 }
 
@@ -778,12 +784,12 @@ function renderTrophies() {
   $('trophies-list').innerHTML = TROPHIES.map((t) => {
     const done = meta.trophies?.includes(t.id);
     const value = Math.min(statValue(meta, t.stat), t.goal);
-    return `<li class="${done ? 'done' : ''}"><span class="text"><b>${t.name}</b>${t.text}</span>` +
+    return `<li class="${done ? 'done' : ''}"><span class="text"><b>${_(t.name)}</b>${_(t.text)}</span>` +
       `<span class="reward">${COIN}${t.reward}</span><div class="bar"><i style="width:${Math.round((value / t.goal) * 100)}%"></i></div>` +
-      `<small>${done ? 'Conquistado' : `${fmt(value)} de ${fmt(t.goal)}`}</small></li>`;
+      `<small>${done ? _('Conquistado') : _('{n} de {total}', { n: fmt(value), total: fmt(t.goal) })}</small></li>`;
   }).join('');
   $('stats-list').innerHTML = Object.entries(STAT_NAMES)
-    .map(([stat, name]) => `<dt>${name}</dt><dd>${fmt(statValue(meta, stat))}</dd>`).join('');
+    .map(([stat, name]) => `<dt>${_(name)}</dt><dd>${fmt(statValue(meta, stat))}</dd>`).join('');
 }
 
 function renderMissionCount() {
@@ -809,7 +815,7 @@ function track(type, value) {
   const before = missions.list.map((m) => m.progress).join();
   for (const m of progressMissions(missions, type, value)) {
     earn(m.reward);
-    toast(`Missão concluída! +${m.reward} moedas`);
+    toast(_('Missão concluída! +{n} moedas', { n: m.reward }));
     sfx.coin();
     renderMissionCount();
   }
@@ -828,8 +834,8 @@ function finishDaily() {
     renderCoins(state.dailyReward > 0);
   }
   el.textContent = state.dailyReward
-    ? `Desafio do dia concluído: +${state.dailyReward} moedas`
-    : `Desafio do dia · seu melhor hoje: ${fmt(meta.challenge?.best ?? state.score)}`;
+    ? _('Desafio do dia concluído: +{n} moedas', { n: state.dailyReward })
+    : _('Desafio do dia · seu melhor hoje: {n}', { n: fmt(meta.challenge?.best ?? state.score) });
 }
 
 // Fim de uma fase: estrelas e recompensa (uma vez só por partida).
@@ -849,7 +855,7 @@ function finishLevelGame() {
 // --- Mapa de fases ---
 
 function renderLevels() {
-  $('levels-total').textContent = `Estrelas: ${totalStars(meta)} de ${LEVEL_COUNT * 3}. Passe uma fase para liberar a seguinte.`;
+  $('levels-total').textContent = _('Estrelas: {n} de {total}. Passe uma fase para liberar a seguinte.', { n: totalStars(meta), total: LEVEL_COUNT * 3 });
   const grid = $('level-grid');
   grid.replaceChildren();
   let nextUp = false;
@@ -863,7 +869,7 @@ function renderLevels() {
     btn.innerHTML = `<b>${n}</b><small>${[1, 2, 3].map((i) => `<span class="${i <= stars ? '' : 'off'}">★</span>`).join('')}</small>`;
     const spec = levelSpec(n);
     btn.title = goalText(spec.goal, chosenKind(), spec.drops);
-    btn.setAttribute('aria-label', `Fase ${n}: ${open ? btn.title : 'bloqueada'}${stars ? `, ${stars} estrelas` : ''}`);
+    btn.setAttribute('aria-label', `${_('Fase {n}', { n })}: ${open ? btn.title : _('bloqueada')}${stars ? `, ${_('{n} estrelas', { n: stars })}` : ''}`);
     if (open && !stars && !nextUp) {
       btn.classList.add('next-up');
       nextUp = true;
@@ -881,7 +887,7 @@ function startLevel(n) {
   newGame(chosenKind(), 'level', n);
   show('game');
   const spec = levelSpec(n);
-  announce(`Fase ${n}: ${goalText(spec.goal, state.kind, spec.drops)}`);
+  announce(`${_('Fase {n}', { n })}: ${goalText(spec.goal, state.kind, spec.drops)}`);
 }
 
 // Mostra um aviso no meio do quintal por alguns segundos (sem atrapalhar o tutorial).
@@ -898,9 +904,10 @@ function announce(text, seconds = 3.5) {
 // Gera uma imagem 1080x1350 com o quintal do jeito que terminou, os pontos e o maior bicho.
 
 function shareText() {
-  const what = state.mode === 'level' ? `a fase ${state.level}${state.won ? ` com ${state.stars} ${state.stars === 1 ? 'estrela' : 'estrelas'}` : ''}`
-    : `${fmt(state.score)} pontos no modo ${MODE_NAMES[state.mode]}`;
-  return `Fiz ${what} no Miau & Au!`;
+  if (state.mode !== 'level') return _('Fiz {n} pontos no modo {mode} no Miau & Au!', { n: fmt(state.score), mode: modeName(state.mode) });
+  if (!state.won) return _('Joguei a fase {n} no Miau & Au!', { n: state.level });
+  return state.stars === 1 ? _('Passei a fase {n} com 1 estrela no Miau & Au!', { n: state.level })
+    : _('Passei a fase {n} com {s} estrelas no Miau & Au!', { n: state.level, s: state.stars });
 }
 
 function drawShareImage() {
@@ -950,10 +957,10 @@ function drawShareImage() {
   c.fillStyle = '#55695b';
   const top = Math.max(0, ...state.bodies.filter((b) => !b.rival && b.special !== 'wild').map((b) => b.level));
   const line = state.mode === 'level'
-    ? `Fase ${state.level}${state.won ? ` · ${'★'.repeat(state.stars)}${'☆'.repeat(3 - state.stars)}` : ''}`
-    : `pontos · ${MODE_NAMES[state.mode]}`;
+    ? `${_('Fase {n}', { n: state.level })}${state.won ? ` · ${'★'.repeat(state.stars)}${'☆'.repeat(3 - state.stars)}` : ''}`
+    : `${_('pontos')} · ${modeName(state.mode)}`;
   c.fillText(line, 540, 395);
-  if (top) c.fillText(`Maior bicho: ${NAMES[state.kind][top - 1]}`, 540, 450);
+  if (top) c.fillText(_('Maior bicho: {name}', { name: animalName(state.kind, top) }), 540, 450);
   return out;
 }
 
@@ -962,13 +969,13 @@ async function openShare() {
   // a janela abre na hora; a imagem aparece assim que fica pronta
   $('share-img').removeAttribute('src');
   $('share-send').hidden = true;
-  $('share-help').textContent = 'Preparando a imagem…';
+  $('share-help').textContent = _('Preparando a imagem…');
   $('share-dialog').showModal();
   await new Promise(requestAnimationFrame);
   const out = drawShareImage();
   shareBlob = await new Promise((resolve) => out.toBlob(resolve, 'image/png'));
   if (!shareBlob) {
-    $('share-help').textContent = 'Não deu para gerar a imagem neste aparelho.';
+    $('share-help').textContent = _('Não deu para gerar a imagem neste aparelho.');
     return;
   }
   if ($('share-img').dataset.url) URL.revokeObjectURL($('share-img').dataset.url);
@@ -978,8 +985,8 @@ async function openShare() {
   const canSend = !!navigator.canShare?.({ files: [file] });
   $('share-send').hidden = !canSend;
   $('share-help').textContent = canSend
-    ? 'Toque em Enviar para mandar a imagem, ou toque e segure nela para salvar.'
-    : 'Toque e segure a imagem para salvar ou mandar para alguém.';
+    ? _('Toque em Enviar para mandar a imagem, ou toque e segure nela para salvar.')
+    : _('Toque e segure a imagem para salvar ou mandar para alguém.');
 }
 
 // Bônus por abrir o jogo: aparece uma vez por dia, no menu.
@@ -989,7 +996,7 @@ function offerDailyBonus() {
   store.set('miau.meta', meta);
   renderCoins(false);
   const days = meta.streak.days;
-  $('bonus-text').textContent = days > 1 ? `${days} dias seguidos! Volte amanhã para ganhar mais.` : 'Volte amanhã: o bônus cresce a cada dia seguido.';
+  $('bonus-text').textContent = days > 1 ? _('{n} dias seguidos! Volte amanhã para ganhar mais.', { n: days }) : _('Volte amanhã: o bônus cresce a cada dia seguido.');
   $('bonus-coins').textContent = `+${fmt(reward)}`;
   $('bonus-days').innerHTML = Array.from({ length: STREAK_CAP }, (_, i) =>
     `<li class="${i < days ? 'on' : ''}${i === Math.min(days, STREAK_CAP) - 1 ? ' now' : ''}">${i + 1}</li>`).join('');
@@ -1010,7 +1017,7 @@ function payout() {
 function renderMissions() {
   $('missions-list').innerHTML = missions.list.map((m) => {
     const pct = Math.round((m.progress / m.goal) * 100);
-    const status = m.done ? 'Concluída' : (m.type === 'kind' ? 'Ainda não' : `${fmt(m.progress)} de ${fmt(m.goal)}`);
+    const status = m.done ? _('Concluída') : (m.type === 'kind' ? _('Ainda não') : _('{n} de {total}', { n: fmt(m.progress), total: fmt(m.goal) }));
     return `<li class="${m.done ? 'done' : ''}"><span class="text">${missionText(m)}</span>` +
       `<span class="reward">${COIN}${m.reward}</span><div class="bar"><i style="width:${pct}%"></i></div><small>${status}</small></li>`;
   }).join('');
@@ -1024,17 +1031,17 @@ function renderAccessories() {
     const using = (meta.acc ?? null) === item.id;
     const li = document.createElement('li');
     if (using) li.className = 'using';
-    li.innerHTML = `<div class="preview">${animalSVG(chosenKind(), 3, 'happy', item.id)}</div><span>${item.name}</span>`;
+    li.innerHTML = `<div class="preview">${animalSVG(chosenKind(), 3, 'happy', item.id)}</div><span>${_(item.name)}</span>`;
     const btn = document.createElement('button');
     btn.type = 'button';
     if (using) {
-      btn.textContent = 'Em uso';
+      btn.textContent = _('Em uso');
       btn.disabled = true;
     } else if (owned) {
-      btn.textContent = 'Usar';
+      btn.textContent = _('Usar');
     } else {
       btn.innerHTML = `${COIN}${fmt(item.price)}`;
-      btn.setAttribute('aria-label', `Comprar ${item.name} por ${item.price} moedas`);
+      btn.setAttribute('aria-label', _('Comprar {name} por {n} moedas', { name: _(item.name), n: item.price }));
       btn.disabled = meta.coins < item.price;
       if (!btn.disabled) btn.className = 'primary';
     }
@@ -1043,7 +1050,7 @@ function renderAccessories() {
       store.set('miau.meta', meta);
       if (!owned) {
         sfx.coin();
-        toast(`Acessório novo: ${item.name}`);
+        toast(_('Acessório novo: {name}', { name: _(item.name) }));
       }
       renderCoins(!owned);
       renderShop();
@@ -1055,7 +1062,7 @@ function renderAccessories() {
 }
 
 function renderShop() {
-  $('shop-coins').textContent = fmt(meta.coins);
+  $('shop-balance').innerHTML = _('Você tem {n} moedas. Ganhe mais jogando e cumprindo missões.', { n: `${COIN}<b>${fmt(meta.coins)}</b>` });
   renderAccessories();
   const list = $('shop-list');
   list.replaceChildren();
@@ -1071,17 +1078,17 @@ function renderShop() {
     c.scale(0.5, 0.5);
     paintScene(c, W, H, isDark(), scene.id);
     const name = document.createElement('span');
-    name.textContent = scene.name;
+    name.textContent = _(scene.name);
     const btn = document.createElement('button');
     btn.type = 'button';
     if (using) {
-      btn.textContent = 'Em uso';
+      btn.textContent = _('Em uso');
       btn.disabled = true;
     } else if (owned) {
-      btn.textContent = 'Usar';
+      btn.textContent = _('Usar');
     } else {
       btn.innerHTML = `${COIN}${fmt(scene.price)}`;
-      btn.setAttribute('aria-label', `Comprar ${scene.name} por ${scene.price} moedas`);
+      btn.setAttribute('aria-label', _('Comprar {name} por {n} moedas', { name: _(scene.name), n: scene.price }));
       btn.disabled = meta.coins < scene.price;
       if (!btn.disabled) btn.className = 'primary';
     }
@@ -1090,7 +1097,7 @@ function renderShop() {
       store.set('miau.meta', meta);
       if (!owned) {
         sfx.coin();
-        toast(`Cenário novo: ${scene.name}`);
+        toast(_('Cenário novo: {name}', { name: _(scene.name) }));
       }
       renderCoins(!owned);
       renderShop();
@@ -1104,11 +1111,11 @@ function renderShop() {
 // Dicas curtas que aparecem no quintal conforme as coisas acontecem, sem travar o jogo.
 
 const TIPS = {
-  aim: 'Arraste o dedo para mirar e solte para o bicho cair.',
-  merge: 'Agora solte outro igual encostado nele: os dois viram um bicho maior.',
-  clock: 'O anel em volta do bicho é o relógio. Se o tempo acabar, ele cai sozinho.',
-  rival: 'Vem aí um intruso! Ele não junta com nada. Para espantá-lo, junte dois bichos encostados nele.',
-  combo: 'Boa! Juntar várias vezes seguidas dá combo e multiplica os pontos.',
+  aim: () => _('Arraste o dedo para mirar e solte para o bicho cair.'),
+  merge: () => _('Agora solte outro igual encostado nele: os dois viram um bicho maior.'),
+  clock: () => _('O anel em volta do bicho é o relógio. Se o tempo acabar, ele cai sozinho.'),
+  rival: () => _('Vem aí um intruso! Ele não junta com nada. Para espantá-lo, junte dois bichos encostados nele.'),
+  combo: () => _('Boa! Juntar várias vezes seguidas dá combo e multiplica os pontos.'),
 };
 // Quanto tempo cada dica fica na tela; as sem tempo esperam o jogador agir.
 const TIP_SECONDS = { clock: 6, rival: 12, combo: 5 };
@@ -1121,7 +1128,7 @@ function tip(step) {
   tutorial.seen.add(step);
   tutorial.step = step;
   tutorial.t = 0;
-  $('coach').textContent = TIPS[step];
+  $('coach').textContent = TIPS[step]();
   $('coach').hidden = false;
 }
 
@@ -1170,7 +1177,7 @@ function handle(events) {
   for (const e of events) {
     if (e.gold) {
       earn(GOLD_COINS);
-      floatText(e.x, e.y + 26, `+${GOLD_COINS} moedas`, 18, '#ffd43b');
+      floatText(e.x, e.y + 26, _('+{n} moedas', { n: GOLD_COINS }), 18, '#ffd43b');
       burst(e.x, e.y, { n: 14, speed: 220, size: 6, colors: ['#ffd43b', '#f5b301', '#fff'] });
       sfx.coin();
     }
@@ -1180,7 +1187,7 @@ function handle(events) {
     }
     if (e.type === 'bark') {
       ring(e.x, e.y, e.r * 3);
-      floatText(e.x, e.y - e.r, state.kind === 'cat' ? 'Miau!' : 'Au!', 24, '#fff');
+      floatText(e.x, e.y - e.r, state.kind === 'cat' ? _('Miau!') : _('Au!'), 24, '#fff');
       shake = Math.max(shake, 0.2);
       sfx.bark();
       continue;
@@ -1193,7 +1200,7 @@ function handle(events) {
         colors: [furColor(state.kind, e.level), '#fff', '#ffd43b'],
       });
       floatText(e.x, e.y, `+${fmt(e.gained)}`);
-      if (e.combo > 1) floatText(e.x, e.y - 22, `Combo x${e.combo}`, 22, '#ffd43b');
+      if (e.combo > 1) floatText(e.x, e.y - 22, _('Combo x{n}', { n: e.combo }), 22, '#ffd43b');
       if (e.level >= 6) shake = 0.25;
       sfx.merge(e.level, e.combo);
       unlock(e.level, true);
@@ -1206,14 +1213,14 @@ function handle(events) {
     } else if (e.type === 'adopt') {
       ring(e.x, e.y, RADII[MAX_LEVEL - 1]);
       floatText(e.x, e.y, `+${fmt(e.gained)}`, 26, '#ffd43b');
-      toast(`${NAMES[state.kind][MAX_LEVEL - 1]} adotado!`);
+      toast(_('{name} adotado!', { name: animalName(state.kind, MAX_LEVEL) }));
       burst(e.x, e.y, { n: 16, speed: 260, size: 9, shape: 'heart', colors: ['#ff6b81', '#ff8fa3', '#fff'], life: 1.1, g: 200 });
       if (!calm.matches) confetti(W);
       shake = 0.4;
       sfx.adopt();
       track('adopt');
     } else if (e.type === 'scare') {
-      floatText(e.x, e.y, `Xô! +${e.gained}`, 18, '#ffb3b3');
+      floatText(e.x, e.y, `${_('Xô!')} +${e.gained}`, 18, '#ffb3b3');
       poof(e.x, e.y, RADII[e.level - 1]);
       fling(sprite(rivalKind(), e.level, 'scared'), e.x, e.y, RADII[e.level - 1], RADII[e.level - 1] * SPRITE_SCALE);
       sfx.scare();
@@ -1298,7 +1305,7 @@ function newGame(kind, mode = 'classic', level = 0) {
   if (!state.over && state.score > 0) { // partida abandonada também rende moedas
     const paid = state.paid;
     const coins = payout();
-    if (coins && !paid) toast(`+${fmt(coins)} moedas pela partida`);
+    if (coins && !paid) toast(_('+{n} moedas pela partida', { n: fmt(coins) }));
   }
   refreshMissions();
   if (mode === 'daily') { // desafio do dia: espécie e sorteio definidos pela data
@@ -1386,7 +1393,7 @@ function renderChooser() {
   }
   for (const el of document.querySelectorAll('[data-best]')) {
     const value = bestOf(el.dataset.best);
-    el.textContent = value ? `Recorde: ${fmt(value)} pontos` : '';
+    el.textContent = value ? _('Recorde: {n} pontos', { n: fmt(value) }) : '';
   }
 }
 for (const btn of document.querySelectorAll('[data-species]')) {
@@ -1431,12 +1438,12 @@ function playAgain() {
 $('play').addEventListener('click', () => {
   $('chooser-note').hidden = !hasGame();
   renderChooser();
-  $('levels-info').textContent = totalStars(meta) ? `${totalStars(meta)} estrelas de ${LEVEL_COUNT * 3}` : '';
+  $('levels-info').textContent = totalStars(meta) ? _('{n} estrelas de {total}', { n: totalStars(meta), total: LEVEL_COUNT * 3 }) : '';
   const c = meta.challenge?.date === today() ? meta.challenge : null;
-  const who = challengeKind(today()) === 'cat' ? 'gatos' : 'cachorros';
+  const cats = challengeKind(today()) === 'cat';
   $('challenge-info').textContent = c
-    ? `Hoje é com ${who}. Seu melhor: ${fmt(c.best)} pontos.`
-    : `Hoje é com ${who}. Vale ${CHALLENGE_REWARD} moedas na primeira partida.`;
+    ? `${cats ? _('Hoje é com gatos.') : _('Hoje é com cachorros.')} ${_('Seu melhor: {n} pontos.', { n: fmt(c.best) })}`
+    : `${cats ? _('Hoje é com gatos.') : _('Hoje é com cachorros.')} ${_('Vale {n} moedas na primeira partida.', { n: CHALLENGE_REWARD })}`;
   $('chooser').showModal();
 });
 $('continue').addEventListener('click', () => show('game'));
@@ -1457,7 +1464,7 @@ $('challenge').addEventListener('click', () => {
   $('chooser').close();
   newGame(null, 'daily');
   show('game');
-  toast('Desafio do dia');
+  toast(_('Desafio do dia'));
 });
 $('bonus-close').addEventListener('click', () => $('bonus').close());
 $('quit').addEventListener('click', () => {
@@ -1510,7 +1517,16 @@ function renderSettings() {
   $('set-music-out').textContent = `${$('set-music').value}%`;
   $('set-sfx-out').textContent = `${$('set-sfx').value}%`;
   $('set-vibrate').checked = settings.vibrate;
+  $('set-lang').value = getLang();
 }
+// Idiomas com o nome de cada um no próprio idioma.
+$('set-lang').innerHTML = Object.entries(LANGS).map(([code, name]) => `<option value="${code}">${name}</option>`).join('');
+$('set-lang').addEventListener('change', () => {
+  settings.lang = $('set-lang').value;
+  store.set('miau.settings', settings);
+  save();
+  location.reload(); // o jogo volta já no idioma novo, com a partida salva
+});
 function saveSettings() {
   store.set('miau.settings', settings);
   setVolumes(settings.music, settings.sfx);

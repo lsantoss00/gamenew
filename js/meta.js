@@ -1,7 +1,7 @@
 // O que existe fora de uma partida: moedas, missões diárias e loja de cenários.
 // Sem nada de tela, para dar para testar direto no Node.
 
-import { NAMES } from './game.js';
+import { _, fmt, animalName } from './i18n.js';
 
 export const SCENES = [
   { id: 'quintal', name: 'Quintal', price: 0 },
@@ -223,16 +223,16 @@ export function validMissions(m) {
 }
 
 export function missionText(m) {
-  const n = m.goal.toLocaleString('pt-BR');
+  const n = fmt(m.goal);
   switch (m.type) {
-    case 'merge': return `Junte bichos ${n} vezes`;
-    case 'scare': return `Espante ${n} intrusos`;
-    case 'drop': return `Solte ${n} bichos`;
-    case 'game': return `Jogue ${n} partidas até o fim`;
-    case 'combo': return `Faça um combo x${n}`;
-    case 'reach': return `Consiga um ${NAMES.cat[m.goal - 1]} ou um ${NAMES.dog[m.goal - 1]}`;
-    case 'score': return `Faça ${n} pontos numa partida`;
-    case 'kind': return `Termine uma partida com ${m.kind === 'cat' ? 'gatos' : 'cachorros'}`;
+    case 'merge': return _('Junte bichos {n} vezes', { n });
+    case 'scare': return _('Espante {n} intrusos', { n });
+    case 'drop': return _('Solte {n} bichos', { n });
+    case 'game': return _('Jogue {n} partidas até o fim', { n });
+    case 'combo': return _('Faça um combo x{n}', { n });
+    case 'reach': return _('Chegue ao nível {n}: {cat} ou {dog}', { n, cat: animalName('cat', m.goal), dog: animalName('dog', m.goal) });
+    case 'score': return _('Faça {n} pontos numa partida', { n });
+    case 'kind': return m.kind === 'cat' ? _('Termine uma partida com gatos') : _('Termine uma partida com cachorros');
     default: return '';
   }
 }

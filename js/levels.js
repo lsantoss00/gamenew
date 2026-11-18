@@ -1,7 +1,7 @@
 // As fases: um objetivo, um limite de bichos e as regras que valem em cada uma.
 // Cada fase tem um sorteio fixo, para ser sempre a mesma a cada tentativa.
 
-import { NAMES } from './game.js';
+import { _, fmt, animalName, isFeminine } from './i18n.js';
 
 export const LEVEL_COUNT = 30;
 const TYPES = ['merges', 'reach', 'score', 'scare'];
@@ -34,24 +34,26 @@ export function levelSpec(n) {
   return { n, goal: { type, value }, drops, rules, seed: n * 7919 + 13 };
 }
 
-const FEMININE = new Set(['Jaguatirica', 'Pantera']);
-const article = (name) => (FEMININE.has(name) ? 'uma' : 'um');
-
 export function goalText(goal, kind, drops) {
-  const v = goal.value.toLocaleString('pt-BR');
-  const what = {
-    merges: `Junte bichos ${v} vezes`,
-    reach: `Consiga ${article(NAMES[kind][goal.value - 1])} ${NAMES[kind][goal.value - 1]}`,
-    score: `Faça ${v} pontos`,
-    scare: `Espante ${v} intrusos`,
-  }[goal.type];
-  return drops ? `${what} com ${drops} bichos` : what;
+  const n = fmt(goal.value);
+  let what;
+  if (goal.type === 'reach') {
+    const name = animalName(kind, goal.value);
+    what = isFeminine(name) ? _('Consiga uma {name}', { name }) : _('Consiga um {name}', { name });
+  } else if (goal.type === 'merges') {
+    what = _('Junte bichos {n} vezes', { n });
+  } else if (goal.type === 'score') {
+    what = _('Faça {n} pontos', { n });
+  } else {
+    what = _('Espante {n} intrusos', { n });
+  }
+  return drops ? _('{goal} com {n} bichos', { goal: what, n: drops }) : what;
 }
 
 // Texto curto do progresso, para o placar.
 export function goalProgress(goal, kind) {
-  if (goal.type === 'reach') return NAMES[kind][goal.value - 1];
-  return `${goal.progress.toLocaleString('pt-BR')}/${goal.value.toLocaleString('pt-BR')}`;
+  if (goal.type === 'reach') return animalName(kind, goal.value);
+  return `${fmt(goal.progress)}/${fmt(goal.value)}`;
 }
 
 // --- Progresso nas fases ---

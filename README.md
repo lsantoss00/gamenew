@@ -20,7 +20,8 @@ Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quint
 - Abrir o jogo em dias seguidos rende um bônus que cresce até o 7º dia.
 - O desafio do dia tem a mesma sequência de bichos para todo mundo e paga 150 moedas na primeira partida.
 - No fim da partida, "Compartilhar resultado" gera uma imagem do quintal com os pontos e o maior bicho, para salvar ou mandar.
-- Em Ajustes (no menu e na pausa): volume da música, volume dos efeitos, vibração e rever o tutorial.
+- Em português, inglês e espanhol: o jogo abre no idioma do aparelho, e dá para trocar em Ajustes.
+- Em Ajustes (no menu e na pausa): idioma, volume da música, volume dos efeitos, vibração e rever o tutorial.
 - Há 19 troféus com recompensa em moedas e uma tela com os números da conta.
 - Durante a partida, as moedas também pagam poderes: sacudir o quintal, tirar um bicho e espantar todos os intrusos. O preço sobe a cada uso na mesma partida.
 
@@ -48,6 +49,7 @@ Esse é também o caminho mais curto para a Play Store: um app Android do tipo "
 - `js/art.js`: desenho dos bichos em SVG, com expressões
 - `js/levels.js`: as 30 fases e o progresso nelas (sem tela, testado em `test/`)
 - `js/album.js`: curiosidades das fichas do álbum e a contagem de aparições
+- `js/i18n.js` e `js/i18n-dict.js`: tradução. O texto em português do código é a chave: `_('Recorde: {n} pontos', { n })` busca o inglês e o espanhol no dicionário. O teste `test/i18n.test.js` falha se algum texto novo ficar sem tradução.
 - `js/meta.js`: moedas, missões diárias e loja (sem tela, testado em `test/`)
 - `js/scene.js`: cenários (quintal, praia, neve, cidade e espaço; dia e noite)
 - `js/fx.js`: partículas e efeitos visuais

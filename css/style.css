@@ -200,6 +200,7 @@ button.settings-btn svg { width: 18px; height: 18px; }
 .setting output { text-align: right; font: 800 16px/1 var(--display); font-variant-numeric: tabular-nums; }
 .setting.check { grid-template-columns: 1fr auto; }
 .setting.check label { grid-column: auto; }
+.setting select { min-height: 40px; padding: 6px 10px; border: 0; border-radius: 12px; background: var(--panel); color: var(--fg); font: 700 15px/1.2 var(--body); box-shadow: 0 3px 0 var(--shadow); }
 .setting input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent); }
 .credits { margin-top: 18px; }
 button.pill { flex: none; min-height: 34px; padding: 6px 12px; border-radius: 99px; font-size: 13px; box-shadow: 0 3px 0 var(--shadow); }

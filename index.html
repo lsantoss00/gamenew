@@ -39,7 +39,7 @@
       <button id="album-btn" type="button">Álbum</button>
       <button id="trophies-btn" type="button">Troféus <span id="trophies-count"></span></button>
     </nav>
-    <p class="record">Recorde: <b id="menu-best">0</b> pontos<span id="menu-streak"></span></p>
+    <p class="record" id="menu-record"></p>
   </section>
 
   <section class="screen" id="game" hidden>
@@ -59,7 +59,7 @@
       <div class="overlay" id="over" hidden>
         <h2 id="over-title">Lotou!</h2>
         <p id="over-stars" class="stars" hidden></p>
-        <p id="over-text">Você fez <b id="final">0</b> pontos.</p>
+        <p id="over-text"></p>
         <p id="challenge-result" hidden></p>
         <p class="earned"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f5b301" stroke="#b97d00" stroke-width="1.6"/><ellipse cx="12" cy="14.6" rx="4.2" ry="3.4" fill="#b97d00"/><circle cx="6.9" cy="10.6" r="1.7" fill="#b97d00"/><circle cx="10.2" cy="7.6" r="1.7" fill="#b97d00"/><circle cx="13.8" cy="7.6" r="1.7" fill="#b97d00"/><circle cx="17.1" cy="10.6" r="1.7" fill="#b97d00"/></svg><b id="earned">+0</b> moedas</p>
         <div class="pick">
@@ -145,6 +145,10 @@
     <output id="set-sfx-out" for="set-sfx"></output>
   </div>
   <div class="setting check">
+    <label for="set-lang">Idioma</label>
+    <select id="set-lang"></select>
+  </div>
+  <div class="setting check">
     <label for="set-vibrate">Vibrar ao juntar bichos</label>
     <input type="checkbox" id="set-vibrate">
   </div>
@@ -169,7 +173,7 @@
     <h2 id="shop-title">Loja</h2>
     <button id="shop-close" type="button">Fechar</button>
   </div>
-  <p class="balance">Você tem <svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f5b301" stroke="#b97d00" stroke-width="1.6"/><ellipse cx="12" cy="14.6" rx="4.2" ry="3.4" fill="#b97d00"/><circle cx="6.9" cy="10.6" r="1.7" fill="#b97d00"/><circle cx="10.2" cy="7.6" r="1.7" fill="#b97d00"/><circle cx="13.8" cy="7.6" r="1.7" fill="#b97d00"/><circle cx="17.1" cy="10.6" r="1.7" fill="#b97d00"/></svg><b id="shop-coins">0</b> moedas. Ganhe mais jogando e cumprindo missões.</p>
+  <p class="balance" id="shop-balance"></p>
   <h3>Cenários</h3>
   <ul class="shop" id="shop-list"></ul>
   <h3>Acessórios</h3>
