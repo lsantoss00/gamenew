@@ -59,10 +59,13 @@ const OLD_AUDIO = { all: [0.7, 1], sfx: [0, 1], off: [0, 0] }[store.get('miau.au
 const settings = { music: OLD_AUDIO[0], sfx: OLD_AUDIO[1], vibrate: true, ...store.get('miau.settings', {}) };
 setVolumes(settings.music, settings.sfx);
 setLang(detectLang(settings.lang));
+document.body.classList.toggle('calm', !!settings.calmMotion);
 document.documentElement.lang = { pt: 'pt-BR', en: 'en', es: 'es' }[getLang()];
 translateDom(document.body);
 const buzz = (ms) => settings.vibrate && navigator.vibrate?.(ms);
-const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
+// Menos movimento: pela preferência do aparelho ou pelo ajuste do jogo.
+const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+const calm = { get matches() { return settings.calmMotion || motionQuery.matches; } };
 
 const save = () => store.set('miau.drop', state);
 
@@ -111,6 +114,35 @@ function sprite(kind, level, mood = 'normal', acc = null) {
   return sprites[key];
 }
 
+// Carrega de antemão os desenhos da partida, para nenhum bicho aparecer como um disco liso.
+function preloadSprites() {
+  const rival = rivalKind();
+  for (let level = 1; level <= MAX_LEVEL; level++) {
+    for (const mood of ['normal', 'happy', 'blink', 'scared']) sprite(state.kind, level, mood, meta.acc);
+    if (level <= 3) for (const mood of ['angry', 'scared', 'normal']) sprite(rival, level, mood);
+  }
+  sprite('wild', 2, 'normal');
+}
+
+// O SVG é redesenhado do zero a cada drawImage; por isso cada bicho vira uma imagem
+// pronta (bitmap) uma vez por tamanho, e é essa imagem que vai para a tela a cada quadro.
+const bitmaps = new Map();
+function spriteBitmap(img, key, px) {
+  if (!img.complete || !img.naturalWidth) return null;
+  const size = Math.min(1024, Math.max(32, Math.ceil(px / 32) * 32)); // tamanhos em degraus de 32 px
+  const full = `${key}@${size}`;
+  let bm = bitmaps.get(full);
+  if (!bm) {
+    bm = document.createElement('canvas');
+    bm.width = size;
+    bm.height = size;
+    bm.getContext('2d').drawImage(img, 0, 0, size, size);
+    bitmaps.set(full, bm);
+    if (bitmaps.size > 400) bitmaps.delete(bitmaps.keys().next().value); // descarta o mais antigo
+  }
+  return bm;
+}
+
 // Desenha um bicho com a cabeça de raio `r` centrada em (x, y).
 // sx/sy amassam o bicho na tela (não giram junto com ele).
 function drawAnimal(kind, level, mood, x, y, r, angle = 0, sx = 1, sy = 1, alpha = 1) {
@@ -119,10 +151,15 @@ function drawAnimal(kind, level, mood, x, y, r, angle = 0, sx = 1, sy = 1, alpha
   ctx.translate(x, y + r * (1 - sy)); // amassa com a base apoiada no chão
   ctx.scale(sx, sy);
   ctx.rotate(angle);
-  const img = sprite(kind, level, mood, kind === state.kind ? meta.acc : null); // só os seus bichos usam acessório
+  const acc = kind === state.kind ? meta.acc : null; // só os seus bichos usam acessório
+  const img = sprite(kind, level, mood, acc);
   const size = r * SPRITE_SCALE;
-  if (img.complete && img.naturalWidth) {
-    ctx.drawImage(img, -size / 2, -size * 0.52, size, size);
+  const px = size * (canvas.width / W) * Math.max(sx, sy);
+  // se a expressão pedida ainda está carregando, usa a expressão normal do mesmo bicho
+  const bm = spriteBitmap(img, `${kind}${level}:${mood}:${acc}`, px)
+    ?? spriteBitmap(sprite(kind, level, 'normal', acc), `${kind}${level}:normal:${acc}`, px);
+  if (bm) {
+    ctx.drawImage(bm, -size / 2, -size * 0.52, size, size);
   } else { // enquanto o desenho carrega
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
@@ -156,11 +193,53 @@ function scene(width = canvas.width, height = canvas.height) {
   return backdrops.get(key);
 }
 
+// --- Resolução e desempenho ---
+// A tela é desenhada com no máximo 2 pixels por ponto. Se o aparelho não acompanhar
+// (quadros passando de ~22 ms), a resolução cai um degrau, até 1x. Ela não volta a subir
+// na mesma visita, para não ficar oscilando.
+const bg = $('bg');
+const bgCtx = bg.getContext('2d');
+let renderCap = 2;
+let bgKey = '';
+
 function resize() {
   const rect = canvas.getBoundingClientRect();
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  canvas.width = Math.round(rect.width * dpr);
-  canvas.height = Math.round(rect.height * dpr);
+  if (!rect.width) return;
+  const scale = Math.min(window.devicePixelRatio || 1, renderCap);
+  const w = Math.round(rect.width * scale);
+  const h = Math.round(rect.height * scale);
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  paintBackground();
+}
+
+// O cenário só é repintado quando muda o tamanho, o tema ou o cenário escolhido.
+function paintBackground() {
+  const key = `${canvas.width}x${canvas.height}:${isDark()}:${meta.scene}`;
+  if (key === bgKey || !canvas.width) return;
+  bgKey = key;
+  bg.width = canvas.width;
+  bg.height = canvas.height;
+  bgCtx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+  paintScene(bgCtx, W, H, isDark(), meta.scene);
+}
+
+let perfFrames = 0;
+let perfTime = 0;
+function watchPerformance(elapsed) {
+  if (document.hidden || elapsed > 0.2) return; // pausa ou volta de outra aba não contam
+  perfFrames++;
+  perfTime += elapsed;
+  if (perfTime < 1.5) return; // avalia a cada 1,5 s de jogo
+  const avg = perfTime / perfFrames;
+  perfFrames = 0;
+  perfTime = 0;
+  if (avg > 0.022 && renderCap > 1) {
+    renderCap = Math.max(1, renderCap - 0.5);
+    resize();
+  }
 }
 new ResizeObserver(resize).observe(canvas);
 
@@ -361,12 +440,46 @@ function drawBody(b, seconds) {
   const kind = b.rival ? rivalKind() : (b.special === 'wild' ? 'wild' : state.kind);
   drawAnimal(kind, b.level, moodOf(b, seconds), b.x, b.y, b.r, b.angle, sx, sy);
   if (b.special) decorate(b.special, b.x, b.y, b.r, seconds, b.sleep);
+  if (settings.assist) assistMarks(b.x, b.y, b.r, b.level, b.rival, b.special === 'wild');
+}
+
+// Ajuda visual: o nível em cada bicho e o intruso marcado sem depender de cor.
+function assistMarks(x, y, r, level, rival, wild) {
+  const br = Math.max(8, r * 0.36);
+  const bx = x + r * 0.62;
+  const by = y + r * 0.62;
+  if (rival) { // anel tracejado preto e branco e um "!"
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineDashOffset = 5.5;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+  }
+  ctx.beginPath();
+  ctx.arc(bx, by, br, 0, Math.PI * 2);
+  ctx.fillStyle = rival ? '#000' : '#fff';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = rival ? '#fff' : '#17261c';
+  ctx.stroke();
+  ctx.fillStyle = rival ? '#fff' : '#17261c';
+  ctx.font = `800 ${Math.round(br * 1.35)}px "Baloo 2 Local", "Baloo 2", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(rival ? '!' : wild ? '★' : String(level), bx, by + br * 0.08);
+  ctx.textBaseline = 'alphabetic';
 }
 
 function draw(seconds) {
+  paintBackground(); // não faz nada se o cenário não mudou
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  const back = scene();
-  if (back) ctx.drawImage(back, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
   drawAmbient(ctx, W, H, calm.matches ? 0 : seconds, isDark(), meta.scene);
   if (shake > 0 && !calm.matches) {
@@ -390,7 +503,7 @@ function draw(seconds) {
   ctx.moveTo(0, LINE_Y + 1.5);
   ctx.lineTo(W, LINE_Y + 1.5);
   ctx.stroke();
-  ctx.strokeStyle = danger ? 'rgb(240 50 50 / 0.95)' : 'rgb(255 255 255 / 0.85)';
+  ctx.strokeStyle = danger ? (settings.assist ? '#ffd400' : 'rgb(240 50 50 / 0.95)') : 'rgb(255 255 255 / 0.85)';
   ctx.beginPath();
   ctx.moveTo(0, LINE_Y);
   ctx.lineTo(W, LINE_Y);
@@ -453,6 +566,7 @@ function draw(seconds) {
     const special = state.currentSpecial;
     drawAnimal(special === 'wild' ? 'wild' : state.kind, state.current, special === 'sleepy' ? 'blink' : mood, state.aim, y, r, sway, 1, 1, ready ? 1 : 0.35);
     if (special && ready) decorate(special, state.aim, y, r, seconds, special === 'sleepy' ? SLEEP_TIME : 0);
+    if (settings.assist && ready) assistMarks(state.aim, y, r, state.current, false, special === 'wild');
     if (ready && clockOn() && state.rules.clock) { // relógio: o anel vai sumindo até o bicho cair sozinho
       ctx.beginPath();
       ctx.arc(state.aim, y, r + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (state.timer / dropTime(state)));
@@ -545,6 +659,9 @@ function renderHud() {
 let toastTimer = 0;
 function toast(text) {
   const el = $('toast');
+  // durante a partida o aviso fica no meio do quintal, sem cobrir o placar
+  const stage = screen === 'game' ? document.querySelector('.stage').getBoundingClientRect() : null;
+  el.style.top = stage ? `${Math.round(stage.top + stage.height * 0.42)}px` : '';
   el.textContent = text;
   el.hidden = false;
   clearTimeout(toastTimer);
@@ -638,12 +755,16 @@ function show(name) {
     checkTrophies();
     renderMenu();
   } else {
+    preloadSprites();
     resize();
     canvas.focus({ preventScroll: true });
   }
 }
 
+let lastMenuDraw = 0;
 function drawMenu(seconds) {
+  if (seconds - lastMenuDraw < 1 / 30) return; // no menu, 30 quadros por segundo bastam
+  lastMenuDraw = seconds;
   const back = scene(menuCanvas.width, menuCanvas.height);
   menuCtx.setTransform(1, 0, 0, 1, 0, 0);
   menuCtx.drawImage(back, 0, 0);
@@ -1244,8 +1365,10 @@ let last = performance.now();
 let acc = 0;
 let announced = null; // último aviso de intruso já anunciado
 function frame(now) {
-  const elapsed = Math.min(0.05, (now - last) / 1000);
+  const raw = (now - last) / 1000;
+  const elapsed = Math.min(0.05, raw);
   last = now;
+  if (screen === 'game' && !paused) watchPerformance(raw);
   if (screen === 'menu') {
     drawMenu(now / 1000);
   } else if (!paused) {
@@ -1517,6 +1640,9 @@ function renderSettings() {
   $('set-music-out').textContent = `${$('set-music').value}%`;
   $('set-sfx-out').textContent = `${$('set-sfx').value}%`;
   $('set-vibrate').checked = settings.vibrate;
+  $('set-assist').checked = !!settings.assist;
+  $('set-calm').checked = !!settings.calmMotion;
+  document.body.classList.toggle('calm', calm.matches);
   $('set-lang').value = getLang();
 }
 // Idiomas com o nome de cada um no próprio idioma.
@@ -1552,6 +1678,14 @@ $('set-vibrate').addEventListener('change', () => {
   settings.vibrate = $('set-vibrate').checked;
   saveSettings();
   buzz(30);
+});
+$('set-assist').addEventListener('change', () => {
+  settings.assist = $('set-assist').checked;
+  saveSettings();
+});
+$('set-calm').addEventListener('change', () => {
+  settings.calmMotion = $('set-calm').checked;
+  saveSettings();
 });
 $('settings-close').addEventListener('click', () => $('settings').close());
 $('set-tutorial').addEventListener('click', () => {

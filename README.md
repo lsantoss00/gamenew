@@ -21,7 +21,7 @@ Jogo de soltar e juntar bichos para celular. Você mira, solta um bicho no quint
 - O desafio do dia tem a mesma sequência de bichos para todo mundo e paga 150 moedas na primeira partida.
 - No fim da partida, "Compartilhar resultado" gera uma imagem do quintal com os pontos e o maior bicho, para salvar ou mandar.
 - Em português, inglês e espanhol: o jogo abre no idioma do aparelho, e dá para trocar em Ajustes.
-- Em Ajustes (no menu e na pausa): idioma, volume da música, volume dos efeitos, vibração e rever o tutorial.
+- Em Ajustes (no menu e na pausa): idioma, volume da música, volume dos efeitos, vibração, ajuda visual (nível escrito em cada bicho e intrusos marcados sem depender de cor), reduzir movimento e rever o tutorial.
 - Há 19 troféus com recompensa em moedas e uma tela com os números da conta.
 - Durante a partida, as moedas também pagam poderes: sacudir o quintal, tirar um bicho e espantar todos os intrusos. O preço sobe a cada uso na mesma partida.
 
@@ -55,3 +55,10 @@ Esse é também o caminho mais curto para a Play Store: um app Android do tipo "
 - `js/fx.js`: partículas e efeitos visuais
 - `js/main.js`: tela (canvas), toque, teclado e salvamento
 - `js/sound.js`: efeitos sonoros e música de fundo, sintetizados, com volume ajustável
+
+## Desempenho
+
+O cenário parado fica numa camada própria (`#bg`), pintada só quando muda; a cada quadro se desenha apenas o que se mexe. Cada bicho é convertido uma vez em imagem pronta por tamanho, em vez de redesenhar o SVG a cada quadro. A tela usa no máximo 2 pixels por ponto e, se os quadros passarem de ~22 ms, o jogo baixa a resolução sozinho em degraus até 1x.
+
+Medido num navegador sem placa de vídeo, com o quintal cheio: de 37 para 60 quadros por segundo; com o processador simulado 6 vezes mais lento, de 5 para cerca de 40.
+

@@ -53,6 +53,7 @@
     </header>
 
     <div class="stage">
+      <canvas id="bg" aria-hidden="true"></canvas>
       <canvas id="canvas" tabindex="0" aria-label="Quintal: arraste para mirar e solte, ou use as setas e a barra de espaço"></canvas>
       <p class="coach" id="coach" role="status" hidden></p>
       <p class="weather" id="weather" role="status" hidden></p>
@@ -151,6 +152,14 @@
   <div class="setting check">
     <label for="set-vibrate">Vibrar ao juntar bichos</label>
     <input type="checkbox" id="set-vibrate">
+  </div>
+  <div class="setting check">
+    <label for="set-assist">Ajuda visual <small>Mostra o nível em cada bicho e marca os intrusos sem depender de cor.</small></label>
+    <input type="checkbox" id="set-assist">
+  </div>
+  <div class="setting check">
+    <label for="set-calm">Reduzir movimento <small>Menos tremores, balanço e animações.</small></label>
+    <input type="checkbox" id="set-calm">
   </div>
   <div class="stack">
     <button id="set-tutorial" type="button">Rever o tutorial</button>
